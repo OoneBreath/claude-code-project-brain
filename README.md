@@ -90,6 +90,15 @@ Then, in a Claude Code session inside your workspace:
 After that you mostly don't think about it: Claude reads the map at the start, checks it before
 redoing work, and updates it when a unit of work is done.
 
+> **A note on the first run.** `init` is light by design — it detects your projects from
+> `package.json` / `pyproject.toml` / git and writes a small index. It does **not** read your
+> source, so it's cheap. The brain then fills in gradually as you actually work.
+>
+> If you want Claude to pre-populate the brain by reading an existing codebase ("deep backfill"),
+> that's a one-time upfront token cost — Claude has to read code to summarise it. Think of it as an
+> investment: you pay tokens once to get organised, and every later session is cheaper and sharper.
+> Scope it to one project at a time. The skill will warn you before doing it.
+
 ## How it works
 
 - The skill lives in `~/.claude/skills/project-brain/` (personal scope, per machine).

@@ -42,15 +42,23 @@ When this skill is invoked, choose the mode that matches the request:
 
 ### Mode: init — create the brain
 Use when no `.project-brain/` exists, or the user says "set up / init project brain".
+
+**Default is a LIGHT init — keep it cheap. Do NOT read the codebase.**
 1. Create `.project-brain/` and `.project-brain/projects/`.
-2. Detect projects in the workspace: top-level git repos, `package.json`, `pyproject.toml`,
-   `go.mod`, `Cargo.toml`, `composer.json`, etc. For each, infer a name and stack.
-3. Write `index.md` from `templates/index.md`, adding one section per detected project with
-   its stack filled in. Leave the topic lists empty (you will fill them as work happens).
+2. Detect projects from cheap signals only: top-level dirs, git repos, `package.json`,
+   `pyproject.toml`, `go.mod`, `Cargo.toml`, `composer.json`. Infer name + stack from those
+   files — do not read source to do this.
+3. Write `index.md` from `templates/index.md`, one section per project with the stack filled in
+   and the topic list empty. Topics get filled as real work happens (via `save`).
 4. Append a tiny pointer to the workspace `CLAUDE.md` (create it if missing) using
    `templates/CLAUDE-snippet.md` — this is what makes future sessions read the map first.
-   Keep this pointer to a few lines; do not duplicate content into it.
-5. Tell the user what you created and how to use recall/save.
+   Keep the pointer to a few lines; never duplicate the map into it.
+5. Tell the user what you created, and that the brain fills in as you work.
+
+**Optional DEEP backfill — only when the user explicitly asks** ("scan the project / populate the
+brain from the codebase"). This reads source and writes topic files up front, so it spends real
+tokens once. Before starting: warn the user it is a one-time upfront cost that pays back on every
+later session, and offer to scope it to **one project at a time** rather than the whole workspace.
 
 ### Mode: recall — "how did we do X" / "did we already do X"
 1. Read **only** `index.md`.
