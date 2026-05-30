@@ -75,17 +75,24 @@ Be honest with yourself about why you'd use this:
 ## Install
 
 ```bash
-git clone https://github.com/<you>/claude-code-project-brain.git
+git clone https://github.com/OoneBreath/claude-code-project-brain.git
 cd claude-code-project-brain
 ./install.sh        # copies the skill into ~/.claude/skills/  (run on each machine)
 ```
 
-Then, in a Claude Code session inside your workspace:
+**Start a new Claude Code session after installing** — skills are loaded at session start, so the
+skill won't show up in a session that was already open.
+
+Then, in a session inside your workspace:
 
 ```
 /project-brain        →  "init"     set up .project-brain/ and detect your projects
 /project-brain        →  "how did we solve X?"   recall through the index
 ```
+
+Run `init` once **per workspace**. The skill is installed per machine (`~/.claude/skills/`), but the
+memory (`.project-brain/`) lives per project — so on a server hosting several repos, point `init` at
+the workspace root and it catalogs them all in one brain.
 
 After that you mostly don't think about it: Claude reads the map at the start, checks it before
 redoing work, and updates it when a unit of work is done.
