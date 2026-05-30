@@ -56,9 +56,17 @@ Use when no `.project-brain/` exists, or the user says "set up / init project br
 5. Tell the user what you created, and that the brain fills in as you work.
 
 **Optional DEEP backfill — only when the user explicitly asks** ("scan the project / populate the
-brain from the codebase"). This reads source and writes topic files up front, so it spends real
-tokens once. Before starting: warn the user it is a one-time upfront cost that pays back on every
-later session, and offer to scope it to **one project at a time** rather than the whole workspace.
+brain from the codebase"). This pre-fills topic files by reading the project, so it spends real
+tokens once.
+
+To keep it cheap and accurate, **read the project's own distilled docs first** — `README`,
+`CHANGELOG`, `docs/`, ADRs, design notes — and fall back to reading source only for the gaps. The
+result reflects what the project actually documents: a well-documented repo backfills richer than a
+bare one. It summarises what's there; it does not invent context. Set the user's expectations
+accordingly — this is not magic, and two different projects will produce different depth.
+
+Before starting: warn the user it is a one-time upfront cost that pays back on every later session,
+and offer to scope it to **one project at a time** rather than the whole workspace.
 
 ### Mode: recall — "how did we do X" / "did we already do X"
 1. Read **only** `index.md`.

@@ -1,0 +1,12 @@
+# Never commit a real Project Brain into the skill repo.
+# A real brain contains your infra details — DB names, ports, server paths, hostnames.
+.project-brain/
+
+# ...except the synthetic example shipped with the skill (acme-*).
+!examples/**/.project-brain/
+!examples/**/.project-brain/**
+
+# Local cruft
+.DS_Store
+*.local
+*.log

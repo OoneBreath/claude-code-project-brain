@@ -102,9 +102,13 @@ redoing work, and updates it when a unit of work is done.
 > source, so it's cheap. The brain then fills in gradually as you actually work.
 >
 > If you want Claude to pre-populate the brain by reading an existing codebase ("deep backfill"),
-> that's a one-time upfront token cost — Claude has to read code to summarise it. Think of it as an
-> investment: you pay tokens once to get organised, and every later session is cheaper and sharper.
-> Scope it to one project at a time. The skill will warn you before doing it.
+> that's a one-time upfront token cost — Claude has to read your code and docs to summarise them.
+> Think of it as an investment: you pay tokens once to get organised, and every later session is
+> cheaper and sharper. Scope it to one project at a time. The skill will warn you before doing it.
+>
+> The result reflects what your project actually documents — a repo with a solid README/CHANGELOG
+> backfills richer than a bare one. It summarises what's there; it doesn't invent context. So expect
+> the depth to vary by project, not a fixed result.
 
 ## How it works
 
@@ -114,6 +118,12 @@ redoing work, and updates it when a unit of work is done.
   map first.
 - One brain can catalog **many projects on one server** or just a single repo.
 - Everything is plain markdown you can read, edit, and commit yourself.
+
+> **Your brain is yours — and it's private by default.** A real `.project-brain/` ends up holding
+> infra details (DB names, ports, server paths, hostnames). Decide per project whether to commit it
+> (travels with the repo, shared with your team) or keep it out of version control. This repo ships
+> a `.gitignore` that ignores `.project-brain/` precisely so the skill's own repo never accidentally
+> carries a real brain.
 
 ---
 
