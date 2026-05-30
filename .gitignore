@@ -7,6 +7,7 @@
 !examples/**/.project-brain/**
 
 # Local cruft
+__pycache__/
 .DS_Store
 *.local
 *.log
