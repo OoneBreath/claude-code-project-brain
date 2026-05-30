@@ -103,17 +103,12 @@ redoing work, and updates it when a unit of work is done.
 
 ## Background
 
-Project Brain came out of running several independent SaaS products at once, where every project
-carries thousands of lines of context and the cost of the AI forgetting — or mixing two projects
-up — is real. It was shaped while building and operating:
-
-- **Sentinel AI** — server security & database autopilot
-- **Sentinel Queen** — multi-server fleet intelligence
-- **24ad.info** — AI-assisted classifieds platform
-- **SpamSlap AI** — contact-form spam protection
-- **PostPilot** — AI social content generation
-
-The pattern isn't theoretical — it's the working memory used to keep all of them straight.
+Project Brain came out of running several independent SaaS products at once — among them
+[Sentinel AI](https://sentinel-ai.info) (server security & database autopilot) and
+[24ad.info](https://24ad.info) (an AI-assisted classifieds platform), alongside a multi-server
+fleet-intelligence backend, an anti-spam service and a content tool. When every project carries
+thousands of lines of context, the cost of the AI forgetting — or quietly mixing two projects up
+— is real. This is the working memory that keeps them straight. The pattern isn't theoretical.
 
 ## License
 
