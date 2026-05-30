@@ -1,0 +1,11 @@
+# Project Brain — index
+
+> Read this first. Drill into projects/<name>/<topic>.md only when you need detail.
+> Status legend: ✓ verified · ✓ done · ⚠ in-progress · ✗ failed · ⨯ superseded
+
+## acme-api  (Node · tRPC · Drizzle · MySQL · Redis)
+- cache  → Redis invalidation on record update   [✓ verified 2026-05-12 · v2] → projects/acme-api/cache.md
+- auth   → tRPC session + refresh tokens          [⚠ in-progress 2026-05-20]   → projects/acme-api/auth.md
+
+## acme-web  (React · TypeScript · Vite · Tailwind)
+- (no topics yet)
