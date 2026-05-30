@@ -118,6 +118,8 @@ redoing work, and updates it when a unit of work is done.
   map first.
 - One brain can catalog **many projects on one server** or just a single repo.
 - Everything is plain markdown you can read, edit, and commit yourself.
+- A bundled `brain-check` validator (`python3 ~/.claude/skills/project-brain/brain-check`) catches
+  broken pointers, malformed frontmatter, and index↔topic status drift — run it after big changes.
 
 > **Your brain is yours — and it's private by default.** A real `.project-brain/` ends up holding
 > infra details (DB names, ports, server paths, hostnames). Decide per project whether to commit it

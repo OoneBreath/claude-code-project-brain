@@ -1,0 +1,153 @@
+#!/usr/bin/env python3
+"""brain-check — validate a Project Brain for integrity.
+
+Checks:
+  - every topic file has well-formed frontmatter with the required keys + a valid status
+  - every pointer in index.md resolves to a file that actually exists
+  - the status shown in index.md matches the status in the topic file (two-sources-of-truth drift)
+  - topic files that exist on disk but are not linked from index.md (orphans)
+  - warns on thin topics (< 300 B) and over-fragmented projects (> 15 topics)
+
+Exit code: 0 = clean (warnings allowed), 1 = errors found.
+No third-party dependencies — Python 3 stdlib only.
+
+Usage:
+  brain-check [PATH]      PATH = a .project-brain dir, a workspace containing one, or omitted (cwd)
+"""
+import os
+import re
+import sys
+
+VALID_STATUS = ["verified", "done", "in-progress", "failed", "superseded"]
+REQUIRED_KEYS = {"project", "topic", "status", "version"}
+THIN_BYTES = 300
+MAX_TOPICS = 15
+
+
+def find_brain(arg):
+    cand = arg or "."
+    if os.path.basename(os.path.normpath(cand)) == ".project-brain" and os.path.isdir(cand):
+        return cand
+    pb = os.path.join(cand, ".project-brain")
+    if os.path.isdir(pb):
+        return pb
+    if os.path.isfile(os.path.join(cand, "index.md")):
+        return cand
+    return None
+
+
+def parse_frontmatter(path):
+    with open(path, encoding="utf-8") as fh:
+        text = fh.read()
+    m = re.match(r"---\s*\n(.*?)\n---", text, re.S)
+    if not m:
+        return None
+    fm = {}
+    for line in m.group(1).splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or ":" not in line:
+            continue
+        k, _, v = line.partition(":")
+        fm[k.strip()] = v.strip()
+    return fm
+
+
+def index_status(bracket):
+    for s in VALID_STATUS:  # ordered: "in-progress" before substrings can't collide
+        if s in bracket:
+            return s
+    return None
+
+
+def main():
+    arg = sys.argv[1] if len(sys.argv) > 1 else None
+    brain = find_brain(arg)
+    if not brain:
+        print("✗ No .project-brain found (looked in cwd / given path).")
+        return 1
+
+    index = os.path.join(brain, "index.md")
+    if not os.path.isfile(index):
+        print(f"✗ Missing index.md in {brain}")
+        return 1
+
+    errors, warnings = [], []
+
+    # 1. collect pointers from index.md
+    linked = set()
+    with open(index, encoding="utf-8") as fh:
+        for i, line in enumerate(fh.read().splitlines(), 1):
+            if "→" not in line:
+                continue
+            mp = re.search(r"(projects/\S+\.md)", line)
+            if not mp:
+                continue
+            rel = mp.group(1).split("#")[0]
+            linked.add(rel)
+            full = os.path.join(brain, rel)
+            mb = re.search(r"\[([^\]]*)\]", line)
+            idx_st = index_status(mb.group(1)) if mb else None
+
+            if not os.path.isfile(full):
+                errors.append(f"index.md:{i} pointer to missing file → {rel}")
+                continue
+
+            fm = parse_frontmatter(full)
+            if fm is None:
+                errors.append(f"{rel}: missing/broken frontmatter (--- block)")
+                continue
+            file_st = fm.get("status")
+            if mb and idx_st is None:
+                warnings.append(f"index.md:{i} status not recognised in [{mb.group(1)}]")
+            elif idx_st and file_st and idx_st != file_st:
+                errors.append(f"{rel}: status drift — index says '{idx_st}', file says '{file_st}'")
+
+    # 2. validate every topic file on disk + find orphans / thin / fragmentation
+    projects_dir = os.path.join(brain, "projects")
+    per_project = {}
+    if os.path.isdir(projects_dir):
+        for root, _dirs, files in os.walk(projects_dir):
+            for name in files:
+                if not name.endswith(".md"):
+                    continue
+                full = os.path.join(root, name)
+                rel = os.path.relpath(full, brain)
+                proj = os.path.basename(os.path.dirname(full))
+                per_project[proj] = per_project.get(proj, 0) + 1
+
+                fm = parse_frontmatter(full)
+                if fm is None:
+                    errors.append(f"{rel}: missing/broken frontmatter (--- block)")
+                else:
+                    missing = REQUIRED_KEYS - set(fm)
+                    if missing:
+                        errors.append(f"{rel}: frontmatter missing keys: {', '.join(sorted(missing))}")
+                    st = fm.get("status")
+                    if st and st not in VALID_STATUS:
+                        errors.append(f"{rel}: invalid status '{st}' (use: {', '.join(VALID_STATUS)})")
+
+                if os.path.getsize(full) < THIN_BYTES:
+                    warnings.append(f"{rel}: thin topic (<{THIN_BYTES} B) — consider merging")
+                if rel not in linked:
+                    warnings.append(f"{rel}: not linked from index.md (orphan)")
+
+    for proj, n in per_project.items():
+        if n > MAX_TOPICS:
+            warnings.append(f"project '{proj}' has {n} topics (>{MAX_TOPICS}) — consider consolidating")
+
+    # report
+    for w in warnings:
+        print(f"⚠ {w}")
+    for e in errors:
+        print(f"✗ {e}")
+
+    total = sum(per_project.values())
+    if errors:
+        print(f"\n✗ {len(errors)} error(s), {len(warnings)} warning(s) across {total} topic file(s).")
+        return 1
+    print(f"\n✓ Brain OK — {total} topic file(s), {len(warnings)} warning(s).")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

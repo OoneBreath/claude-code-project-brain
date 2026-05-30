@@ -47,7 +47,10 @@ Use when no `.project-brain/` exists, or the user says "set up / init project br
 1. Create `.project-brain/` and `.project-brain/projects/`.
 2. Detect projects from cheap signals only: top-level dirs, git repos, `package.json`,
    `pyproject.toml`, `go.mod`, `Cargo.toml`, `composer.json`. Infer name + stack from those
-   files — do not read source to do this.
+   files — do not read source to do this. **Skip non-project directories** —
+   `node_modules`, `venv`, `.venv`, `target`, `dist`, `build`, `.cache`, `snap`,
+   `android-sdk`, `flutter`, `.git` — and anything that is clearly a toolchain or data dump,
+   not a codebase. When unsure, ask rather than adding noise.
 3. Write `index.md` from `templates/index.md`, one section per project with the stack filled in
    and the topic list empty. Topics get filled as real work happens (via `save`).
 4. Append a tiny pointer to the workspace `CLAUDE.md` (create it if missing) using
@@ -87,6 +90,16 @@ and offer to scope it to **one project at a time** rather than the whole workspa
 3. Update the matching line in `index.md`: status-with-outcome + date + version + pointer.
    Keep it to **one line**. All detail goes in the topic file, never in the index.
 4. If the project section doesn't exist in `index.md` yet, add it.
+5. Run `brain-check` (see Validate) so the index line and the topic file can't silently drift.
+
+### Validate — keep the two sources of truth in sync
+Run the bundled validator any time, and especially after a `save`:
+```
+python3 ~/.claude/skills/project-brain/brain-check [workspace]
+```
+It checks that every pointer resolves, frontmatter is well-formed with a valid status, and the
+status in `index.md` matches the status in the topic file. Exit code 1 = real errors to fix;
+warnings (thin topics, orphans, over-fragmentation) are advisory.
 
 ## index.md format
 
@@ -139,4 +152,7 @@ version: 2
 - **Tag topics** so cross-project recall works via grep on `tags:`.
 - **Don't over-fragment.** One file per meaningful topic, not per keystroke. Dozens of files
   good; hundreds of micro-files bad.
+- **Reference code by stable anchors, not line numbers.** Point to `file.ts` + a function or
+  symbol name, not `file.ts:273` — line numbers rot on the first refactor. This is narrative
+  memory, not a live index, so write references that survive editing.
 - **Keep CLAUDE.md pointer tiny.** It points to the map; it is not a copy of the map.
