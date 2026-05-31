@@ -2,6 +2,8 @@
 
 **Stop re-explaining your projects to the AI every session.**
 
+![Project Brain in action — Claude reads the project map, recalls how the cache fix was done, and refuses to silently redo verified work](docs/demo.gif)
+
 Project Brain is a [Claude Code](https://claude.com/claude-code) skill that gives Claude a
 small, navigable map of your projects — their stack, decisions, pitfalls, and what's already
 been done — so it stops forgetting, stops mixing projects up, and stops re-reading a
