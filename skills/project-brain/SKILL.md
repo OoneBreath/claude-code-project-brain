@@ -156,3 +156,22 @@ version: 2
   symbol name, not `file.ts:273` — line numbers rot on the first refactor. This is narrative
   memory, not a live index, so write references that survive editing.
 - **Keep CLAUDE.md pointer tiny.** It points to the map; it is not a copy of the map.
+
+## Keeping the brain lean — archiving
+
+Topic files are **cold storage**: only `index.md` is read eagerly, so a topic file costs nothing
+until something opens it. That means the brain's per-session weight is bounded by the **index**,
+not by the total amount of history you keep — a brain with hundreds of topic files is still cheap
+as long as the index stays a list of one-liners. This is the whole reason it doesn't rot like a
+flat `notes.md` that grows heavier every session.
+
+So you almost never need to delete anything. When a topic is genuinely dead (obsolete, replaced,
+no longer a project), **archive instead of delete**:
+
+1. Remove its **one line** from `index.md` — this is what actually frees eager-token budget.
+2. **Keep the topic file** (optionally move it to `projects/<project>/_archive/`). History survives
+   and is still findable by grep if it's ever needed again.
+
+Never auto-delete a user's notes — durable memory is the point. Archiving is a manual, occasional
+tidy: the index is the only thing that needs to stay lean, and dropping a line from it is enough.
+Use `last_done` dates and the `⨯ superseded` status to spot what's stale.

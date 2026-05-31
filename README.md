@@ -120,6 +120,10 @@ redoing work, and updates it when a unit of work is done.
 - Everything is plain markdown you can read, edit, and commit yourself.
 - A bundled `brain-check` validator (`python3 ~/.claude/skills/project-brain/brain-check`) catches
   broken pointers, malformed frontmatter, and index↔topic status drift — run it after big changes.
+- **It doesn't bloat over time.** Topic files are cold storage — only the index is ever loaded
+  eagerly, so the per-session cost is bounded by the index, not by how much history you keep.
+  Unlike a flat `notes.md` that gets heavier every session, the brain stays light. To tidy a dead
+  topic you *archive* it (drop its one line from the index, keep the file) — nothing auto-deletes.
 
 > **Your brain is yours — and it's private by default.** A real `.project-brain/` ends up holding
 > infra details (DB names, ports, server paths, hostnames). Decide per project whether to commit it
