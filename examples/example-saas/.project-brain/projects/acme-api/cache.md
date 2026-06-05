@@ -3,7 +3,9 @@ project: acme-api
 topic: cache
 tags: [redis, invalidation, performance]
 status: verified
+trust: human
 last_done: 2026-05-12
+review_by: 2026-11-12
 version: 2
 ---
 

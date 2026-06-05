@@ -6,7 +6,15 @@ Checks:
   - every pointer in index.md resolves to a file that actually exists
   - the status shown in index.md matches the status in the topic file (two-sources-of-truth drift)
   - topic files that exist on disk but are not linked from index.md (orphans)
+  - provenance: `trust:` is valid (human | ai-inferred) when present
+  - staleness: a verified/done topic past its `review_by:` (or older than the staleness horizon
+    by `last_done:`) is flagged "re-confirm before trusting"
+  - cross-project mix-ups: `project:` must match the folder the file lives under, and a topic that
+    name-drops another project without declaring it in `cross_refs:` is flagged
   - warns on thin topics (< 300 B) and over-fragmented projects (> 15 topics)
+
+Backward compatible: the new provenance/staleness/cross-project signals are WARNINGS, never errors,
+and only fire on fields a brain actually uses — older brains keep passing untouched.
 
 Exit code: 0 = clean (warnings allowed), 1 = errors found.
 No third-party dependencies — Python 3 stdlib only.
@@ -17,9 +25,13 @@ Usage:
 import os
 import re
 import sys
+from datetime import date, datetime
 
 VALID_STATUS = ["verified", "done", "in-progress", "failed", "superseded"]
+VALID_TRUST = ["human", "ai-inferred"]
 REQUIRED_KEYS = {"project", "topic", "status", "version"}
+FINISHED_STATUS = {"verified", "done"}   # only finished claims can go "stale"
+STALE_DAYS = 180                          # horizon used when a topic has no explicit review_by
 THIN_BYTES = 300
 MAX_TOPICS = 15
 
@@ -36,9 +48,12 @@ def find_brain(arg):
     return None
 
 
-def parse_frontmatter(path):
+def read_text(path):
     with open(path, encoding="utf-8") as fh:
-        text = fh.read()
+        return fh.read()
+
+
+def parse_frontmatter(text):
     m = re.match(r"---\s*\n(.*?)\n---", text, re.S)
     if not m:
         return None
@@ -50,6 +65,13 @@ def parse_frontmatter(path):
         k, _, v = line.partition(":")
         fm[k.strip()] = v.strip()
     return fm
+
+
+def parse_date(s):
+    try:
+        return datetime.strptime(s.strip(), "%Y-%m-%d").date()
+    except Exception:
+        return None
 
 
 def index_status(bracket):
@@ -72,6 +94,16 @@ def main():
         return 1
 
     errors, warnings = [], []
+    today = date.today()
+
+    # known project names = subfolders under projects/ (used for the cross-project guard)
+    projects_dir = os.path.join(brain, "projects")
+    project_names = set()
+    if os.path.isdir(projects_dir):
+        project_names = {
+            n for n in os.listdir(projects_dir)
+            if os.path.isdir(os.path.join(projects_dir, n)) and not n.startswith("_")
+        }
 
     # 1. collect pointers from index.md
     linked = set()
@@ -92,7 +124,7 @@ def main():
                 errors.append(f"index.md:{i} pointer to missing file → {rel}")
                 continue
 
-            fm = parse_frontmatter(full)
+            fm = parse_frontmatter(read_text(full))
             if fm is None:
                 errors.append(f"{rel}: missing/broken frontmatter (--- block)")
                 continue
@@ -103,7 +135,6 @@ def main():
                 errors.append(f"{rel}: status drift — index says '{idx_st}', file says '{file_st}'")
 
     # 2. validate every topic file on disk + find orphans / thin / fragmentation
-    projects_dir = os.path.join(brain, "projects")
     per_project = {}
     if os.path.isdir(projects_dir):
         for root, _dirs, files in os.walk(projects_dir):
@@ -112,20 +143,69 @@ def main():
                     continue
                 full = os.path.join(root, name)
                 rel = os.path.relpath(full, brain)
-                proj = os.path.basename(os.path.dirname(full))
-                per_project[proj] = per_project.get(proj, 0) + 1
+                folder = os.path.basename(os.path.dirname(full))
+                per_project[folder] = per_project.get(folder, 0) + 1
 
-                fm = parse_frontmatter(full)
+                text = read_text(full)
+                fm = parse_frontmatter(text)
                 if fm is None:
                     errors.append(f"{rel}: missing/broken frontmatter (--- block)")
-                else:
-                    missing = REQUIRED_KEYS - set(fm)
-                    if missing:
-                        errors.append(f"{rel}: frontmatter missing keys: {', '.join(sorted(missing))}")
-                    st = fm.get("status")
-                    if st and st not in VALID_STATUS:
-                        errors.append(f"{rel}: invalid status '{st}' (use: {', '.join(VALID_STATUS)})")
+                    continue
 
+                missing = REQUIRED_KEYS - set(fm)
+                if missing:
+                    errors.append(f"{rel}: frontmatter missing keys: {', '.join(sorted(missing))}")
+                st = fm.get("status")
+                if st and st not in VALID_STATUS:
+                    errors.append(f"{rel}: invalid status '{st}' (use: {', '.join(VALID_STATUS)})")
+
+                # --- provenance: trust must be valid when present ---
+                trust = fm.get("trust")
+                if trust and trust not in VALID_TRUST:
+                    warnings.append(f"{rel}: invalid trust '{trust}' (use: {' | '.join(VALID_TRUST)})")
+
+                # --- cross-project guard: project: must match the folder ---
+                file_proj = fm.get("project")
+                if file_proj and folder and not folder.startswith("_") and file_proj != folder:
+                    warnings.append(
+                        f"{rel}: project '{file_proj}' doesn't match folder '{folder}' — "
+                        f"possible cross-project mix-up (move the file or fix `project:`)"
+                    )
+
+                # --- cross-project guard: name-dropping another project in the body ---
+                declared = fm.get("cross_refs", "")
+                for other in project_names:
+                    if other in (folder, file_proj) or len(other) < 4 or other in declared:
+                        continue
+                    if re.search(r"\b" + re.escape(other) + r"\b", text):
+                        warnings.append(
+                            f"{rel}: mentions other project '{other}' — confirm it belongs here, "
+                            f"or add it to `cross_refs:`"
+                        )
+
+                # --- staleness: a finished claim that needs re-confirming ---
+                if st in FINISHED_STATUS:
+                    review_by = fm.get("review_by")
+                    last_done = fm.get("last_done")
+                    if review_by:
+                        d = parse_date(review_by)
+                        if d is None:
+                            warnings.append(f"{rel}: review_by '{review_by}' is not a YYYY-MM-DD date")
+                        elif today > d:
+                            warnings.append(
+                                f"{rel}: stale — review_by {review_by} has passed; re-confirm before trusting"
+                            )
+                    elif last_done:
+                        d = parse_date(last_done)
+                        if d is None:
+                            warnings.append(f"{rel}: last_done '{last_done}' is not a YYYY-MM-DD date")
+                        elif (today - d).days > STALE_DAYS:
+                            warnings.append(
+                                f"{rel}: stale — {st} topic last confirmed {last_done} "
+                                f"(> {STALE_DAYS} days ago); re-verify before trusting"
+                            )
+
+                # --- advisory: size / orphan ---
                 if os.path.getsize(full) < THIN_BYTES:
                     warnings.append(f"{rel}: thin topic (<{THIN_BYTES} B) — consider merging")
                 if rel not in linked:

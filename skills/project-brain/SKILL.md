@@ -1,6 +1,6 @@
 ---
 name: project-brain
-version: 1.0.0
+version: 1.1.0
 description: >-
   Persistent, navigable project memory for Claude Code that survives across
   sessions and months. Use when the user wants to set up project memory ("set up
@@ -78,7 +78,12 @@ and offer to scope it to **one project at a time** rather than the whole workspa
 3. Read **only** that one topic file for detail. Do not read sibling topic files.
 4. If the user is asking to redo something already marked `✓ done` or `✓ verified`,
    **say so and ask**: repeat it, or make a new change? Never silently redo finished work.
-5. For cross-cutting questions ("everything Redis", "all auth work"), grep topic-file
+5. **Weigh how much to trust it** before acting on it (see *Provenance & staleness*):
+   - `trust: human` = a person vouched for this — treat as reliable. Absent or `trust: ai-inferred`
+     = the AI wrote it without confirmation — useful, but verify before you rely on it.
+   - Past its `review_by`, or `last_done` long ago = possibly stale. Say "this was confirmed back
+     in <date> — worth re-checking?" rather than presenting it as current fact.
+6. For cross-cutting questions ("everything Redis", "all auth work"), grep topic-file
    frontmatter `tags:` rather than reading files whole.
 
 ### Mode: save — after completing work
@@ -88,6 +93,10 @@ and offer to scope it to **one project at a time** rather than the whole workspa
    - If it existed: **bump `version`**, and keep the previous approach as a short
      `vN (superseded): ...` line in the body. Do not erase history.
    - Set `status` to the real outcome (see legend).
+   - Set `trust` honestly: `human` only when the user actually confirmed it (or you verified it
+     end-to-end); otherwise `ai-inferred`. Never label your own guess `human`.
+   - Make sure `project:` equals the folder name — a mismatch is how projects get mixed up.
+   - Optionally set `review_by:` for facts that age (credentials, versions, "current" anything).
 3. Update the matching line in `index.md`: status-with-outcome + date + version + pointer.
    Keep it to **one line**. All detail goes in the topic file, never in the index.
 4. If the project section doesn't exist in `index.md` yet, add it.
@@ -99,8 +108,11 @@ Run the bundled validator any time, and especially after a `save`:
 python3 ~/.claude/skills/project-brain/brain-check [workspace]
 ```
 It checks that every pointer resolves, frontmatter is well-formed with a valid status, and the
-status in `index.md` matches the status in the topic file. Exit code 1 = real errors to fix;
-warnings (thin topics, orphans, over-fragmentation) are advisory.
+status in `index.md` matches the status in the topic file. It also flags (as advisory warnings)
+an invalid `trust:`, a topic past its staleness horizon, and cross-project mix-ups — a `project:`
+that doesn't match its folder, or a topic that name-drops another project without a `cross_refs:`.
+Exit code 1 = real errors to fix; warnings (staleness, provenance, cross-project, thin topics,
+orphans, over-fragmentation) are advisory.
 
 ## index.md format
 
@@ -124,15 +136,41 @@ warnings (thin topics, orphans, over-fragmentation) are advisory.
 - `✗ failed` — tried, did not work (kept so we don't repeat it)
 - `⨯ superseded` — replaced by a newer approach (see the topic's latest version)
 
+## Provenance & staleness — memory that knows what it doesn't know
+
+`status` answers *"did the work succeed?"*. Two more (optional) fields answer *"can I trust this
+note, and is it still current?"* — the thing flat notes never tell you:
+
+- **`trust:`** — who vouches for the note. `human` = a person confirmed it (gospel). `ai-inferred`
+  (or absent) = the AI wrote it without confirmation; useful, but verify before relying on it. This
+  keeps a model's own guesses from hardening into "facts" just because they're written down.
+- **`review_by:`** — an optional expiry date. Past it (or, with no `review_by`, once `last_done` is
+  older than ~180 days), `brain-check` flags a *finished* topic as stale: re-confirm before
+  trusting. Memory with an expiry date, instead of treating last year's note as still true.
+
+When you recall a topic, factor both in (see Mode: recall). When you save, set `trust` honestly and
+add `review_by` to anything that ages — credentials, versions, "current" prod state.
+
+## Don't mix projects up — the cross-project guard
+
+The multi-project case is where memory rots into wrong answers: a fact from project A applied to
+project B. Two guards:
+- A topic's `project:` **must equal the folder** it lives under (`projects/<project>/`). `brain-check`
+  warns on any mismatch — that's almost always a misfiled, contaminating note.
+- If a topic name-drops another known project in its body, declare it in `cross_refs:` when it's
+  intentional; otherwise `brain-check` asks you to confirm it belongs there.
+
 ## topic file frontmatter
 
 ```markdown
 ---
-project: acme-api
+project: acme-api         # MUST match the folder under projects/
 topic: cache
 tags: [redis, invalidation, performance]
-status: verified          # verified | done | in-progress | failed | superseded
+status: verified          # verified | done | in-progress | failed | superseded  (did the work succeed?)
+trust: human              # human | ai-inferred  (who vouches for this? absent = ai-inferred)
 last_done: 2026-05-12
+review_by: 2026-11-12      # optional: re-confirm by this date, else flagged stale
 version: 2
 ---
 
@@ -156,7 +194,27 @@ version: 2
 - **Reference code by stable anchors, not line numbers.** Point to `file.ts` + a function or
   symbol name, not `file.ts:273` — line numbers rot on the first refactor. This is narrative
   memory, not a live index, so write references that survive editing.
+- **Be honest about provenance.** Mark `trust: human` only when a person actually confirmed it.
+  Your own inference is `ai-inferred` — writing it down does not make it true.
+- **Keep the map clean — suggest, don't auto-save.** The brain is valuable because a human chose
+  what is worth remembering. Never bulk-dump a session into it. When work is done, *propose* what to
+  save and let the user decide. (The bundled `brain-nudge` Stop hook only reminds — it cannot write.)
 - **Keep CLAUDE.md pointer tiny.** It points to the map; it is not a copy of the map.
+
+## Optional: the save reminder (brain-nudge hook)
+
+A bundled `Stop` hook (`brain-nudge`) reminds you to keep the brain current. When a session changed
+files but `index.md` wasn't updated, it surfaces a one-time note: *"you did work — want to save any
+of it?"*. It **never writes to the brain and never blocks** — auto-saving everything would turn the
+map into a swamp. It only nudges; the human still decides what is worth keeping.
+
+- Installed as a **plugin**, the hook is wired up automatically (`hooks/hooks.json`).
+- Installed as a **skill only**, add it yourself in `~/.claude/settings.json`:
+  ```json
+  { "hooks": { "Stop": [ { "hooks": [
+    { "type": "command", "command": "~/.claude/skills/project-brain/brain-nudge" }
+  ] } ] } }
+  ```
 
 ## Keeping the brain lean — archiving
 

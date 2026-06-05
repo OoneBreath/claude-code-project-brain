@@ -3,6 +3,7 @@ project: acme-api
 topic: auth
 tags: [auth, sessions, tokens]
 status: in-progress
+trust: human
 last_done: 2026-05-20
 version: 1
 ---

@@ -65,12 +65,30 @@ Be honest with yourself about why you'd use this:
 - **Multi-month memory.** Come back to a project after three months and Claude still knows how it
   works — without you pasting a kilometre of README.
 
-## Two things make it better than a flat notes file
+## What makes it better than a flat notes file
 
 1. **Status carries the outcome, not just "done":** `✓ verified` vs `✗ failed` vs `⚠ in-progress`.
    The model knows the difference between *"done and works"* and *"we tried that and it broke."*
 2. **Versioning, not overwriting.** When an approach is replaced, the old one is kept as a
    superseded note — so the trail of *what was tried and why it changed* survives.
+3. **Provenance — it knows what it doesn't know.** Every note can be marked `trust: human` (a person
+   confirmed it) or `ai-inferred` (the model wrote it without confirmation). A flat notes file blurs
+   the two, so a model's guess hardens into "fact" just by being written down. The brain keeps them
+   apart, so Claude trusts the confirmed and double-checks the inferred.
+4. **Staleness — memory with an expiry date.** Facts age: credentials rotate, versions move, "current"
+   stops being current. Topics carry a `review_by` date (or fall back to a ~180-day horizon), and the
+   validator flags anything past it as *"re-confirm before trusting"* instead of serving last year's
+   note as gospel.
+5. **A cross-project guard.** The multi-project case is where memory rots into *wrong* answers — a
+   fact from project A applied to project B. The validator catches misfiled notes (a `project:` that
+   doesn't match its folder) and flags a topic that name-drops another project without declaring it.
+6. **A save reminder that suggests, never auto-saves.** An optional `Stop` hook notices when a session
+   changed files but the brain wasn't updated, and reminds you to save *if it's worth it*. It can't
+   write to the brain and can't act on its own — because auto-dumping every session would turn the
+   map into a swamp. A human still decides what's worth remembering.
+
+The validator (`brain-check`) enforces 1–5: run it any time to catch index/topic drift, stale facts,
+bad provenance, and cross-project contamination — no dependencies, plain Python 3.
 
 ---
 
@@ -121,7 +139,12 @@ redoing work, and updates it when a unit of work is done.
 - One brain can catalog **many projects on one server** or just a single repo.
 - Everything is plain markdown you can read, edit, and commit yourself.
 - A bundled `brain-check` validator (`python3 ~/.claude/skills/project-brain/brain-check`) catches
-  broken pointers, malformed frontmatter, and index↔topic status drift — run it after big changes.
+  broken pointers, malformed frontmatter, index↔topic status drift, stale facts, bad provenance, and
+  cross-project mix-ups — run it after big changes.
+- An optional `brain-nudge` Stop hook reminds you to save when a session changed files but the brain
+  wasn't updated. Auto-wired if you install as a Claude Code **plugin**; skill-only users can add a
+  one-line `Stop` hook to `settings.json` (see the skill's own `SKILL.md`). It only suggests — it
+  never writes to the brain.
 - **It doesn't bloat over time.** Topic files are cold storage — only the index is ever loaded
   eagerly, so the per-session cost is bounded by the index, not by how much history you keep.
   Unlike a flat `notes.md` that gets heavier every session, the brain stays light. To tidy a dead

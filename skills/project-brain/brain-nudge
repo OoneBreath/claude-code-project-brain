@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# brain-nudge — Project Brain session reminder (Claude Code "Stop" hook).
+#
+# It SUGGESTS saving to the brain when a session changed files but the brain's
+# index wasn't updated. It NEVER writes to the brain and NEVER blocks the model —
+# auto-saving everything would turn the map into a swamp. The whole point of the
+# brain is that a human decides what is worth remembering, so this only nudges:
+# "you changed things — want to save any of it?", never "saved it for you".
+#
+# Fires at most once per unsaved-work window: after it nudges, it stays quiet
+# until index.md changes (i.e. until you actually save), then resets. State is
+# kept OUTSIDE the repo so it never dirties the user's brain.
+#
+# No third-party deps. Safe to run anywhere — if there is no brain, it exits 0
+# silently and does nothing.
+set -u
+
+# Workspace: prefer Claude's project dir, fall back to cwd.
+ws="${CLAUDE_PROJECT_DIR:-$PWD}"
+brain="$ws/.project-brain"
+index="$brain/index.md"
+
+# No brain here -> nothing to nudge about.
+[ -f "$index" ] || exit 0
+
+# Did real work happen that the brain doesn't reflect yet?
+changed=0
+if git -C "$ws" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  [ -n "$(git -C "$ws" status --porcelain 2>/dev/null)" ] && changed=1
+else
+  # non-git: any file newer than index.md (ignore the brain's own files + noise)
+  hit="$(find "$ws" -type f -newer "$index" \
+           -not -path "$brain/*" \
+           -not -path "*/.git/*" \
+           -not -path "*/node_modules/*" \
+           -print -quit 2>/dev/null)"
+  [ -n "$hit" ] && changed=1
+fi
+[ "$changed" -eq 1 ] || exit 0
+
+# Throttle: one nudge per unsaved-work window, keyed on index.md mtime.
+stamp="$(date -r "$index" +%s 2>/dev/null || stat -c %Y "$index" 2>/dev/null || echo 0)"
+key="$(printf '%s' "$ws" | cksum | cut -d' ' -f1)"
+state="${TMPDIR:-/tmp}/project-brain-nudge-$key"
+if [ -f "$state" ] && [ "$(cat "$state" 2>/dev/null)" = "$stamp" ]; then
+  exit 0
+fi
+printf '%s' "$stamp" > "$state" 2>/dev/null || true
+
+# Suggest — never act. A Stop-hook systemMessage is surfaced to the user.
+cat <<'JSON'
+{"systemMessage":"🧠 Project Brain: this session changed files but the brain index hasn’t been updated yet. If you did meaningful work, ask Claude whether to save it to the brain — it won’t save automatically."}
+JSON
+exit 0

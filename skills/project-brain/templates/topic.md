@@ -1,10 +1,13 @@
 ---
-project: <project-name>
+project: <project-name>      # MUST match the folder under projects/ — a mismatch is a cross-project mix-up
 topic: <short-topic-slug>
 tags: [<tag1>, <tag2>]
-status: in-progress          # verified | done | in-progress | failed | superseded
+status: in-progress          # verified | done | in-progress | failed | superseded  (did the WORK succeed?)
+trust: ai-inferred           # human | ai-inferred  (WHO vouches for this note? absent = treat as ai-inferred)
 last_done: <YYYY-MM-DD>
+review_by: <YYYY-MM-DD>       # optional: re-confirm by this date, else brain-check flags it stale
 version: 1
+# cross_refs: [other-project] # optional: declare an intentional mention of another project, to silence the guard
 ---
 
 **Problem:** <what was wrong / what was needed>
