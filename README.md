@@ -81,7 +81,10 @@ Be honest with yourself about why you'd use this:
    note as gospel.
 5. **A cross-project guard.** The multi-project case is where memory rots into *wrong* answers — a
    fact from project A applied to project B. The validator catches misfiled notes (a `project:` that
-   doesn't match its folder) and flags a topic that name-drops another project without declaring it.
+   doesn't match its folder). An opt-in `--strict` mode additionally flags a topic that name-drops
+   another project without declaring it — left **off by default on purpose**: in tightly-coupled
+   setups projects reference each other legitimately, so on a real interconnected brain it produces
+   false positives. Turn it on only when you want strict project isolation.
 6. **A save reminder that suggests, never auto-saves.** An optional `Stop` hook notices when a session
    changed files but the brain wasn't updated, and reminds you to save *if it's worth it*. It can't
    write to the brain and can't act on its own — because auto-dumping every session would turn the
@@ -140,7 +143,8 @@ redoing work, and updates it when a unit of work is done.
 - Everything is plain markdown you can read, edit, and commit yourself.
 - A bundled `brain-check` validator (`python3 ~/.claude/skills/project-brain/brain-check`) catches
   broken pointers, malformed frontmatter, index↔topic status drift, stale facts, bad provenance, and
-  cross-project mix-ups — run it after big changes.
+  misfiled (cross-project) notes — run it after big changes. Add `--strict` for stricter
+  cross-project isolation (flags inter-project mentions; noisy on coupled brains, so off by default).
 - An optional `brain-nudge` Stop hook reminds you to save when a session changed files but the brain
   wasn't updated. Auto-wired if you install as a Claude Code **plugin**; skill-only users can add a
   one-line `Stop` hook to `settings.json` (see the skill's own `SKILL.md`). It only suggests — it

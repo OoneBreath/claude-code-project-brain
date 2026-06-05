@@ -1,6 +1,6 @@
 ---
 name: project-brain
-version: 1.1.0
+version: 1.1.1
 description: >-
   Persistent, navigable project memory for Claude Code that survives across
   sessions and months. Use when the user wants to set up project memory ("set up
@@ -109,10 +109,10 @@ python3 ~/.claude/skills/project-brain/brain-check [workspace]
 ```
 It checks that every pointer resolves, frontmatter is well-formed with a valid status, and the
 status in `index.md` matches the status in the topic file. It also flags (as advisory warnings)
-an invalid `trust:`, a topic past its staleness horizon, and cross-project mix-ups — a `project:`
-that doesn't match its folder, or a topic that name-drops another project without a `cross_refs:`.
-Exit code 1 = real errors to fix; warnings (staleness, provenance, cross-project, thin topics,
-orphans, over-fragmentation) are advisory.
+an invalid `trust:`, a topic past its staleness horizon, and a `project:` that doesn't match its
+folder. Add `--strict` to additionally flag topics that name-drop another project without a
+`cross_refs:` (off by default — noisy on coupled brains). Exit code 1 = real errors to fix; warnings
+(staleness, provenance, cross-project, thin topics, orphans, over-fragmentation) are advisory.
 
 ## index.md format
 
@@ -155,10 +155,11 @@ add `review_by` to anything that ages — credentials, versions, "current" prod 
 
 The multi-project case is where memory rots into wrong answers: a fact from project A applied to
 project B. Two guards:
-- A topic's `project:` **must equal the folder** it lives under (`projects/<project>/`). `brain-check`
-  warns on any mismatch — that's almost always a misfiled, contaminating note.
-- If a topic name-drops another known project in its body, declare it in `cross_refs:` when it's
-  intentional; otherwise `brain-check` asks you to confirm it belongs there.
+- **Always on:** a topic's `project:` **must equal the folder** it lives under (`projects/<project>/`).
+  `brain-check` warns on any mismatch — that's almost always a misfiled, contaminating note.
+- **Opt-in (`brain-check --strict`):** flags a topic that name-drops another known project in its body
+  without declaring it in `cross_refs:`. Off by default on purpose — in tightly-coupled setups
+  projects reference each other legitimately, so this is noise unless you want strict isolation.
 
 ## topic file frontmatter
 

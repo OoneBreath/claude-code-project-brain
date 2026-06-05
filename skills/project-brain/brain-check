@@ -9,8 +9,10 @@ Checks:
   - provenance: `trust:` is valid (human | ai-inferred) when present
   - staleness: a verified/done topic past its `review_by:` (or older than the staleness horizon
     by `last_done:`) is flagged "re-confirm before trusting"
-  - cross-project mix-ups: `project:` must match the folder the file lives under, and a topic that
-    name-drops another project without declaring it in `cross_refs:` is flagged
+  - cross-project mix-ups: `project:` must match the folder the file lives under (always on)
+  - (--strict only) a topic that name-drops another known project without declaring it in
+    `cross_refs:` is flagged — off by default because tightly-coupled brains reference each
+    other on purpose, and flagging every legitimate mention is just noise
   - warns on thin topics (< 300 B) and over-fragmented projects (> 15 topics)
 
 Backward compatible: the new provenance/staleness/cross-project signals are WARNINGS, never errors,
@@ -20,7 +22,9 @@ Exit code: 0 = clean (warnings allowed), 1 = errors found.
 No third-party dependencies — Python 3 stdlib only.
 
 Usage:
-  brain-check [PATH]      PATH = a .project-brain dir, a workspace containing one, or omitted (cwd)
+  brain-check [PATH] [--strict]
+      PATH      a .project-brain dir, a workspace containing one, or omitted (cwd)
+      --strict  also flag cross-project name-drops in topic bodies (noisy on coupled brains)
 """
 import os
 import re
@@ -82,7 +86,10 @@ def index_status(bracket):
 
 
 def main():
-    arg = sys.argv[1] if len(sys.argv) > 1 else None
+    args = sys.argv[1:]
+    strict = "--strict" in args
+    positional = [a for a in args if not a.startswith("-")]
+    arg = positional[0] if positional else None
     brain = find_brain(arg)
     if not brain:
         print("✗ No .project-brain found (looked in cwd / given path).")
@@ -172,16 +179,19 @@ def main():
                         f"possible cross-project mix-up (move the file or fix `project:`)"
                     )
 
-                # --- cross-project guard: name-dropping another project in the body ---
-                declared = fm.get("cross_refs", "")
-                for other in project_names:
-                    if other in (folder, file_proj) or len(other) < 4 or other in declared:
-                        continue
-                    if re.search(r"\b" + re.escape(other) + r"\b", text):
-                        warnings.append(
-                            f"{rel}: mentions other project '{other}' — confirm it belongs here, "
-                            f"or add it to `cross_refs:`"
-                        )
+                # --- cross-project guard (--strict): name-dropping another project in the body ---
+                # Off by default: coupled brains reference each other on purpose, so flagging every
+                # legitimate mention is noise. Opt in with --strict for stricter project isolation.
+                if strict:
+                    declared = fm.get("cross_refs", "")
+                    for other in project_names:
+                        if other in (folder, file_proj) or len(other) < 4 or other in declared:
+                            continue
+                        if re.search(r"\b" + re.escape(other) + r"\b", text):
+                            warnings.append(
+                                f"{rel}: mentions other project '{other}' — confirm it belongs here, "
+                                f"or add it to `cross_refs:`"
+                            )
 
                 # --- staleness: a finished claim that needs re-confirming ---
                 if st in FINISHED_STATUS:

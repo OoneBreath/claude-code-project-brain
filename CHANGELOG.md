@@ -3,6 +3,14 @@
 All notable changes to Project Brain are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); the project uses semantic-ish versioning.
 
+## [1.1.1] — 2026-06-05
+
+### Changed
+- The cross-project body-mention check is now **opt-in via `brain-check --strict`** (was on by
+  default). On tightly-coupled multi-project brains, projects reference each other on purpose, so
+  flagging every legitimate mention was noise. The precise guard — `project:` must match its folder —
+  stays **always on**. Found by testing against a real interconnected brain before shipping.
+
 ## [1.1.0] — 2026-06-05
 
 Backward compatible: every new field is optional and every new check is an advisory **warning**,
