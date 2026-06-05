@@ -1,5 +1,6 @@
 ---
 name: project-brain
+version: 1.0.0
 description: >-
   Persistent, navigable project memory for Claude Code that survives across
   sessions and months. Use when the user wants to set up project memory ("set up

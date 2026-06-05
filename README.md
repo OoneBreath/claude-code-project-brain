@@ -144,6 +144,10 @@ fleet-intelligence backend, an anti-spam service and a content tool. When every 
 thousands of lines of context, the cost of the AI forgetting — or quietly mixing two projects up
 — is real. This is the working memory that keeps them straight. The pattern isn't theoretical.
 
+## Author
+
+Built and maintained by **Slawomir Luzny** — [fixflex.co.uk/project-brain.html](https://fixflex.co.uk/project-brain.html).
+
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE). Copyright (c) 2026 Slawomir Luzny.

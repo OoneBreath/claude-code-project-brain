@@ -1,0 +1,22 @@
+{
+  "name": "project-brain",
+  "version": "1.0.0",
+  "description": "Persistent, navigable project memory for Claude Code — a .project-brain/ folder of plain markdown that survives across sessions and months, so Claude stops forgetting, stops mixing projects up, and stops re-reading huge docs every session.",
+  "author": {
+    "name": "Slawomir Luzny",
+    "email": "info@fixflex.co.uk",
+    "url": "https://fixflex.co.uk"
+  },
+  "homepage": "https://fixflex.co.uk/project-brain.html",
+  "repository": "https://github.com/OoneBreath/claude-code-project-brain",
+  "license": "MIT",
+  "keywords": [
+    "claude-code",
+    "memory",
+    "persistent-memory",
+    "project-memory",
+    "skill",
+    "context",
+    "multi-project"
+  ]
+}
