@@ -73,8 +73,11 @@ Be honest with yourself about why you'd use this:
    superseded note — so the trail of *what was tried and why it changed* survives.
 3. **Provenance — it knows what it doesn't know.** Every note can be marked `trust: human` (a person
    confirmed it) or `ai-inferred` (the model wrote it without confirmation). A flat notes file blurs
-   the two, so a model's guess hardens into "fact" just by being written down. The brain keeps them
-   apart, so Claude trusts the confirmed and double-checks the inferred.
+   the two, so a model's guess hardens into "fact" just by being written down. Two distinct things keep
+   them apart: `brain-check` validates that the field carries a real value (`human`/`ai-inferred`), and
+   then **Claude weighs it at read time** — trust the confirmed, double-check the inferred. That
+   weighing is a behavioral rule in the skill's recall instructions, not something the validator
+   enforces; the validator only guarantees the label is there and well-formed.
 4. **Staleness — memory with an expiry date.** Facts age: credentials rotate, versions move, "current"
    stops being current. Topics carry a `review_by` date (or fall back to a ~180-day horizon), and the
    validator flags anything past it as *"re-confirm before trusting"* instead of serving last year's
@@ -85,13 +88,17 @@ Be honest with yourself about why you'd use this:
    another project without declaring it — left **off by default on purpose**: in tightly-coupled
    setups projects reference each other legitimately, so on a real interconnected brain it produces
    false positives. Turn it on only when you want strict project isolation.
-6. **A save reminder that suggests, never auto-saves.** An optional `Stop` hook notices when a session
-   changed files but the brain wasn't updated, and reminds you to save *if it's worth it*. It can't
+6. **A save reminder that suggests, never auto-saves.** An optional `Stop` hook fires at the end of a
+   turn and, when the workspace changed files but the brain wasn't updated, reminds you to save *if
+   it's worth it* — throttled, so it nudges once after you've done work, not on every turn. It can't
    write to the brain and can't act on its own — because auto-dumping every session would turn the
    map into a swamp. A human still decides what's worth remembering.
 
-The validator (`brain-check`) enforces 1–5: run it any time to catch index/topic drift, stale facts,
-bad provenance, and cross-project contamination — no dependencies, plain Python 3.
+The validator (`brain-check`) is what keeps the structure honest: run it any time to catch index/topic
+drift, stale facts (#4), misfiled cross-project notes (#5), and a `trust:` field set to a bad value
+(#3) — no dependencies, plain Python 3. Note the scope: it checks structure and freshness; the
+trust-*weighing* in #3 and the save *nudge* in #6 are behaviors at read/turn time, not validator
+checks.
 
 ---
 
@@ -142,11 +149,12 @@ redoing work, and updates it when a unit of work is done.
 - One brain can catalog **many projects on one server** or just a single repo.
 - Everything is plain markdown you can read, edit, and commit yourself.
 - A bundled `brain-check` validator (`python3 ~/.claude/skills/project-brain/brain-check`) catches
-  broken pointers, malformed frontmatter, index↔topic status drift, stale facts, bad provenance, and
-  misfiled (cross-project) notes — run it after big changes. Add `--strict` for stricter
+  broken pointers, malformed frontmatter, index↔topic status drift, stale facts, an invalid `trust:`
+  value, and misfiled (cross-project) notes — run it after big changes. Add `--strict` for stricter
   cross-project isolation (flags inter-project mentions; noisy on coupled brains, so off by default).
-- An optional `brain-nudge` Stop hook reminds you to save when a session changed files but the brain
-  wasn't updated. Auto-wired if you install as a Claude Code **plugin**; skill-only users can add a
+- An optional `brain-nudge` Stop hook fires at the end of a turn and reminds you to save when the
+  workspace changed files but the brain wasn't updated — throttled, so it nudges once after work, not
+  every turn. Auto-wired if you install as a Claude Code **plugin**; skill-only users can add a
   one-line `Stop` hook to `settings.json` (see the skill's own `SKILL.md`). It only suggests — it
   never writes to the brain.
 - **It doesn't bloat over time.** Topic files are cold storage — only the index is ever loaded
