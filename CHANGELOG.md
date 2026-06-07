@@ -3,6 +3,23 @@
 All notable changes to Project Brain are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); the project uses semantic-ish versioning.
 
+## [1.1.2] — 2026-06-07
+
+Docs and attribution only — no behavior change.
+
+### Added
+- `CONTRIBUTING.md` and `SECURITY.md` — how to contribute, and how to report a vulnerability
+  privately (with a reminder never to store secrets in brain notes).
+- README section **"Works across tools (same brain, different agents)"** — the same `.project-brain/`
+  was read and written by Claude Code and by Windsurf (state persisted across a restart), and read by
+  a third-party agent over SSH. Documents the honest limit: managing a brain needs a capable agentic
+  model — a small local 7B model failed the read→use→write loop and hallucinated the brain's contents.
+
+### Changed
+- Author attribution now also travels with the **distributed** skill: `author:` in `SKILL.md`
+  frontmatter + an attribution footer, plus an author/repo/license header in `install.sh`
+  (previously attribution lived only in `LICENSE`, `README`, and the plugin manifest).
+
 ## [1.1.1] — 2026-06-05
 
 ### Changed

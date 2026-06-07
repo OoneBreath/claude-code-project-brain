@@ -1,6 +1,6 @@
 {
   "name": "project-brain",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Persistent, navigable project memory for Claude Code — a .project-brain/ folder of plain markdown that survives across sessions and months, so Claude stops forgetting, stops mixing projects up, and stops re-reading huge docs every session.",
   "author": {
     "name": "Slawomir Luzny",
