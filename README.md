@@ -170,6 +170,33 @@ redoing work, and updates it when a unit of work is done.
 
 ---
 
+## Works across tools (same brain, different agents)
+
+Because a brain is just a `.project-brain/` folder of Markdown on disk, it isn't tied to one tool.
+Any agent that can read files in the workspace can read the brain — and a capable one can also write
+to it and run the validator. I tested this on a single server with several agents in separate sessions:
+
+- **Claude Code** — full cycle: reads the brain, writes new topics with correct frontmatter, runs
+  `brain-check`.
+- **Windsurf** — same full cycle, and the saved state persisted across a restart (wrote a new topic,
+  validator passed, reopened the session and the brain was intact).
+- **A third agent from another vendor** — connected over SSH and read the brain correctly, pulling
+  the right project details on demand.
+
+So one brain can back several tools at once: write something in one agent, and the next agent — even
+a different one — picks up the same map, status flags, and history. The `project-brain` skill itself
+(install, init, hooks) is built for Claude Code, but the underlying convention (the Markdown layout +
+the validator) travels to any file-reading agent.
+
+**The honest limit — the model matters more than the tool.** This works when the agent is driven by a
+capable model with real tool use. I tried a small local 7B model and it failed: it couldn't reliably
+run the read → use → write loop, and instead of admitting it couldn't read a file, it started
+inventing the brain's contents. So the convention is portable, but the full read-and-manage loop needs
+a model that can actually do agentic tool use. Reading a brain is nearly universal; managing one well
+is not. The memory is only as good as the model reading it.
+
+---
+
 ## Background
 
 Project Brain came out of running several independent SaaS products at once — among them

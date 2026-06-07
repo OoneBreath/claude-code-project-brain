@@ -1,6 +1,7 @@
 ---
 name: project-brain
 version: 1.1.1
+author: Slawomir Luzny <info@fixflex.co.uk> (https://fixflex.co.uk)
 description: >-
   Persistent, navigable project memory for Claude Code that survives across
   sessions and months. Use when the user wants to set up project memory ("set up
@@ -235,3 +236,8 @@ no longer a project), **archive instead of delete**:
 Never auto-delete a user's notes — durable memory is the point. Archiving is a manual, occasional
 tidy: the index is the only thing that needs to stay lean, and dropping a line from it is enough.
 Use `last_done` dates and the `⨯ superseded` status to spot what's stale.
+
+---
+
+*Project Brain — built and maintained by **Slawomir Luzny** ([fixflex.co.uk](https://fixflex.co.uk)).
+MIT licensed. Contributions and issues: https://github.com/OoneBreath/claude-code-project-brain*
