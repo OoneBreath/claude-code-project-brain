@@ -151,6 +151,8 @@ def main():
             for name in files:
                 if not name.endswith(".md"):
                     continue
+                if name.startswith("_"):
+                    continue  # session logs / archives (_session.md, _*.cold.md) — not topics
                 full = os.path.join(root, name)
                 rel = os.path.relpath(full, brain)
                 folder = os.path.basename(os.path.dirname(full))
@@ -227,6 +229,21 @@ def main():
     for proj, n in per_project.items():
         if n > MAX_TOPICS:
             warnings.append(f"project '{proj}' has {n} topics (>{MAX_TOPICS}) — consider consolidating")
+
+    # session logs: keep the active per-project log to <= 5 lines (older rotates to _session.cold.md)
+    if os.path.isdir(projects_dir):
+        for proj in sorted(os.listdir(projects_dir)):
+            sp = os.path.join(projects_dir, proj, "_session.md")
+            if os.path.isfile(sp):
+                n = sum(
+                    1 for ln in read_text(sp).splitlines()
+                    if ln.strip() and not ln.strip().startswith("#")
+                )
+                if n > 5:
+                    warnings.append(
+                        f"projects/{proj}/_session.md has {n} active lines (>5) — "
+                        f"rotate the oldest into _session.cold.md"
+                    )
 
     # tiers: more than HOT_MAX {hot} pins — only the first HOT_MAX are honored, extras go WARM
     try:

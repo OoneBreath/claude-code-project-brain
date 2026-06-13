@@ -103,10 +103,15 @@ and offer to scope it to **one project at a time** rather than the whole workspa
 3. Update the matching line in `index.md`: status-with-outcome + date + version + pointer.
    Keep it to **one line**. All detail goes in the topic file, never in the index.
 4. If the project section doesn't exist in `index.md` yet, add it.
-5. Regenerate the compact index so the fast path stays in sync — it is deterministic and free
+5. **Session summary (where we left off).** When the work wraps a session, refresh the project's
+   one-line resume (see *Session summaries*): move the project's current `> resume …` line (if any)
+   to the **top** of `projects/<project>/_session.md`, then write a fresh `> resume <today> · done: …
+   · next: … · blocker: …` under the project header in `index.md`. Keep `_session.md` to **5 active
+   lines** — older lines rotate to the top of `projects/<project>/_session.cold.md` (cold storage).
+6. Regenerate the compact index so the fast path stays in sync — it is deterministic and free
    (no LLM, no tokens): `python3 ~/.claude/skills/project-brain/brain-compact [workspace]`.
    Always edit `index.md` (the source of truth); never hand-edit `index.compact`.
-6. Run `brain-check` (see Validate) so the index line and the topic file can't silently drift.
+7. Run `brain-check` (see Validate) so the index line and the topic file can't silently drift.
 
 ### Validate — keep the two sources of truth in sync
 Run the bundled validator any time, and especially after a `save`:
@@ -129,12 +134,16 @@ additionally flag topics that name-drop another project without a
 > Read this first. Drill into projects/<name>/<topic>.md only when you need detail.
 
 ## acme-api  (Node · tRPC · Drizzle · MySQL · Redis)
+> resume 2026-05-20 · done: refresh endpoint · next: client silent refresh · blocker: denylist store
 - cache → Redis invalidation on ad update   [✓ verified 2026-05-12 · v2] → projects/acme-api/cache.md
 - auth  → tRPC session handling             [⚠ in-progress 2026-04-30]   → projects/acme-api/auth.md
 
 ## acme-web  (React · TypeScript · Vite)
 - (no topics yet)
 ```
+
+The optional `> resume …` blockquote under a project header is the **one-line session summary** —
+where you left off (done / next / blocker + date). See *Session summaries* below.
 
 **Optional tier markers** on a project header (see *Tiers* below): `## billing  (Go) {hot}` pins it
 HOT; `## legacy-api  (PHP) {archived}` makes it COLD. No marker = automatic tiering by recency.
@@ -173,10 +182,12 @@ a real multi-project brain). It is what you read at session start; the markdown 
 @src index.md  @gen 2026-06-13
 
 P+ acme-api  Node·tRPC·Drizzle·MySQL·Redis
+  ~ 2026-05-20 next: client silent refresh · blocker: denylist store
   cache ✓v 2026-05-12 v2
   auth ⚠ 2026-05-20
 ```
 
+The `~ …` line is the **session resume** (surfaced for HOT projects only — see *Session summaries*).
 `brain-check` warns (advisory) when `index.compact` is missing or out of date with `index.md`.
 
 ## Tiers — HOT / WARM / COLD (keeping the compact small at scale)
@@ -198,6 +209,29 @@ Tiering only shapes the **generated** compact — `index.md` always holds every 
 nothing is hidden from a deliberate read. Selection is deterministic (recency + pins, not the clock),
 so regeneration is stable. `brain-check` warns if more than 3 projects are pinned `{hot}` (only the
 first 3 are honored; the rest fall to WARM).
+
+## Session summaries — "where did we leave off?"
+
+Topic files capture *what a thing is*; a session summary captures *what just happened and what's
+next*. After a working session, each touched project carries a single **one-line resume**:
+
+```
+> resume 2026-05-20 · done: refresh endpoint · next: client silent refresh · blocker: denylist store
+```
+
+- **Current resume lives in `index.md`** (under the project header) — so it is the source of truth and
+  shows up when you read the map. At session start, the compact surfaces it for **HOT** projects as a
+  `~ <date> next: … · blocker: …` line (forward-looking: `done` is dropped to stay lean), so you
+  immediately see where to pick up — no need to open anything.
+- **History lives in `projects/<project>/_session.md`** — previous resume lines, newest first. Kept to
+  **5 active lines**; older lines rotate to `projects/<project>/_session.cold.md` (cold storage, never
+  loaded eagerly). On a new save, the old resume drops from `index.md` into `_session.md`, and the
+  fresh one takes its place in `index.md` — no duplication.
+- Files starting with `_` (`_session.md`, `*.cold.md`) are **not topics**: `brain-check` skips them and
+  warns only if the active `_session.md` grows past 5 lines (rotate the oldest down).
+
+This makes resuming a project instant and keeps the rolling log from bloating the index — the same
+index-stays-lean principle as topic files.
 
 ## Provenance & staleness — memory that knows what it doesn't know
 

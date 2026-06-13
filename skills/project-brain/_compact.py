@@ -86,6 +86,7 @@ def parse_index(text):
                 "name": name,
                 "stack": stack,
                 "topics": [],
+                "resume": None,
                 "hot": "hot" in markers,
                 "archived": "archived" in markers or name.startswith("_"),
             }
@@ -94,6 +95,9 @@ def parse_index(text):
         if cur is None:
             continue
         ls = line.strip()
+        if ls.startswith("> resume"):  # one-line session summary: done/next/blocker + date
+            cur["resume"] = ls[len("> resume"):].strip()
+            continue
         if not ls.startswith("-"):
             continue
         body = ls[1:].strip()
@@ -123,6 +127,34 @@ def _recency(project):
     """A project's most recent activity = the latest topic date (YYYY-MM-DD sorts lexically)."""
     dates = [t["date"] for t in project["topics"] if t["date"]]
     return max(dates) if dates else ""
+
+
+def _compact_resume(raw):
+    """Condense an index.md `> resume <date> · done: … · next: … · blocker: …` line for compact.
+
+    Forward-looking only: keep next/blocker (what a resume needs); drop done unless it is the only
+    field. Returns a `~ …` line or None.
+    """
+    if not raw:
+        return None
+    date = ""
+    fields = {}
+    for seg in (s.strip() for s in raw.split("·")):
+        if re.match(r"^\d{4}-\d{2}-\d{2}$", seg):
+            date = seg
+        elif ":" in seg:
+            k, _, v = seg.partition(":")
+            if v.strip():
+                fields[k.strip().lower()] = v.strip()
+    parts = [f"{k}: {fields[k]}" for k in ("next", "blocker") if fields.get(k)]
+    if not parts and fields.get("done"):
+        parts = [f"done: {fields['done']}"]
+    out = "~"
+    if date:
+        out += " " + date
+    if parts:
+        out += " " + " · ".join(parts)
+    return out if out != "~" else None
 
 
 def assign_tiers(projects):
@@ -177,6 +209,10 @@ def render_compact(text, gen_date=None):
             out.append(head + tail)
             continue
         out.append(head)
+        if p["tier"] == "HOT":  # surface "where we left off" only for the always-loaded HOT projects
+            rs = _compact_resume(p["resume"])
+            if rs:
+                out.append("  " + rs)
         if not p["topics"]:
             out.append("  -")
             continue

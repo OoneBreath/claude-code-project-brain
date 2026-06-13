@@ -7,6 +7,7 @@
 @src index.md  @gen 2026-06-13
 
 P+ acme-api  Node·tRPC·Drizzle·MySQL·Redis
+  ~ 2026-05-20 next: client silent refresh on 401 · blocker: refresh-token denylist store (Redis vs DB) undecided
   cache ✓v 2026-05-12 v2
   auth ⚠ 2026-05-20
 P+ acme-web  React·TypeScript·Vite·Tailwind
