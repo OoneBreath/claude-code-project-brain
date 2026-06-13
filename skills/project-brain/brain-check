@@ -13,18 +13,23 @@ Checks:
   - (--strict only) a topic that name-drops another known project without declaring it in
     `cross_refs:` is flagged — off by default because tightly-coupled brains reference each
     other on purpose, and flagging every legitimate mention is just noise
-  - warns on thin topics (< 300 B) and over-fragmented projects (> 15 topics)
+  - warns on thin topics (< 300 B), over-long topics (> 40 body lines), over-fragmented
+    projects (> 15 topics), and session-log overflow (> 5 active lines)
+  - conflict detector: a single project that names two of the same mutually-exclusive tech
+    (a relational DB, or a host) across its index stack and topic files — likely a stale fact
 
-Backward compatible: the new provenance/staleness/cross-project signals are WARNINGS, never errors,
-and only fire on fields a brain actually uses — older brains keep passing untouched.
+Backward compatible: the new provenance/staleness/cross-project/conflict signals are WARNINGS,
+never errors, and only fire on fields a brain actually uses — older brains keep passing untouched.
 
 Exit code: 0 = clean (warnings allowed), 1 = errors found.
 No third-party dependencies — Python 3 stdlib only.
 
 Usage:
-  brain-check [PATH] [--strict]
+  brain-check [PATH] [--strict] [--report]
       PATH      a .project-brain dir, a workspace containing one, or omitted (cwd)
       --strict  also flag cross-project name-drops in topic bodies (noisy on coupled brains)
+      --report  print a grouped, readable report (staleness, conflicts, orphans, …) instead
+                of a flat warning list — same checks, easier to scan
 """
 import os
 import re
@@ -89,9 +94,64 @@ def index_status(bracket):
     return None
 
 
+# --- conflict detector: mutually-exclusive tech a single project should not name two of ---
+# Deliberately small and high-signal: a relational DB swap or a host swap is the classic
+# "two places disagree" rot. Redis (a cache) is NOT here — it coexists with a real DB.
+TECH_GROUPS = {
+    "relational-db": {"mysql", "mariadb", "postgres", "postgresql", "sqlite",
+                      "mssql", "oracle", "cockroachdb"},
+    "host": {"ovh", "hetzner", "aws", "gcp", "azure", "digitalocean", "linode", "vultr"},
+}
+TECH_CANON = {"postgresql": "postgres"}
+
+
+def find_tech(text):
+    """Tech tokens present in text, grouped by mutually-exclusive category (canonicalized)."""
+    low = text.lower()
+    found = {}
+    for group, toks in TECH_GROUPS.items():
+        for tok in toks:
+            if re.search(r"(?<![a-z0-9])" + re.escape(tok) + r"(?![a-z0-9])", low):
+                found.setdefault(group, set()).add(TECH_CANON.get(tok, tok))
+    return found
+
+
+# --- --report grouping: classify a warning string into a section (default output is unchanged) ---
+REPORT_SECTIONS = [
+    ("conflict",      "Conflicts (contradictory facts)"),
+    ("staleness",     "Staleness (re-confirm before trusting)"),
+    ("cross-project", "Cross-project (possible mix-ups)"),
+    ("provenance",    "Provenance"),
+    ("tiers",         "Tiers"),
+    ("compact",       "Compact index"),
+    ("hygiene",       "Hygiene (size, orphans, fragmentation, session logs)"),
+    ("index",         "Index"),
+]
+
+
+def categorize(msg):
+    m = msg.lower()
+    if "conflict" in m:  # "conflicting <group> …" and "conflict check skipped …"
+        return "conflict"
+    if "doesn't match folder" in m or "mentions other project" in m:
+        return "cross-project"
+    if "stale" in m or "review_by" in m or "last_done" in m:
+        return "staleness"
+    if "invalid trust" in m:
+        return "provenance"
+    if "pinned {hot}" in m or "tier check skipped" in m:
+        return "tiers"
+    if "index.compact" in m or "compact consistency" in m:
+        return "compact"
+    if "status not recognised" in m:
+        return "index"
+    return "hygiene"  # thin/long topics, orphans, over-fragmentation, session-log overflow
+
+
 def main():
     args = sys.argv[1:]
     strict = "--strict" in args
+    report = "--report" in args
     positional = [a for a in args if not a.startswith("-")]
     arg = positional[0] if positional else None
     brain = find_brain(arg)
@@ -147,6 +207,7 @@ def main():
 
     # 2. validate every topic file on disk + find orphans / thin / fragmentation
     per_project = {}
+    tech_sources = {}  # project -> group -> canon-token -> {sources} (for the conflict detector)
     if os.path.isdir(projects_dir):
         for root, _dirs, files in os.walk(projects_dir):
             for name in files:
@@ -234,9 +295,39 @@ def main():
                 if rel not in linked:
                     warnings.append(f"{rel}: not linked from index.md (orphan)")
 
+                # --- conflict detector: gather exclusive tech tokens this topic names ---
+                for group, toks in find_tech(text).items():
+                    for canon in toks:
+                        (tech_sources.setdefault(folder, {})
+                                     .setdefault(group, {})
+                                     .setdefault(canon, set()).add(rel))
+
     for proj, n in per_project.items():
         if n > MAX_TOPICS:
             warnings.append(f"project '{proj}' has {n} topics (>{MAX_TOPICS}) — consider consolidating")
+
+    # conflict detector: fold in each project's declared stack from index.md, then flag any
+    # project that names two of the same mutually-exclusive category (relational DB / host)
+    try:
+        for p in _compact.parse_index(read_text(index)):
+            for group, toks in find_tech(" ".join(p["stack"])).items():
+                for canon in toks:
+                    (tech_sources.setdefault(p["name"], {})
+                                 .setdefault(group, {})
+                                 .setdefault(canon, set()).add("index.md (stack)"))
+    except Exception as exc:
+        warnings.append(f"conflict check skipped ({exc})")
+    for proj in sorted(tech_sources):
+        for group in sorted(tech_sources[proj]):
+            canons = tech_sources[proj][group]
+            if len(canons) > 1:
+                detail = "; ".join(
+                    f"{c} ({', '.join(sorted(srcs))})" for c, srcs in sorted(canons.items())
+                )
+                warnings.append(
+                    f"project '{proj}': conflicting {group} — {detail} — "
+                    f"same project names two; reconcile, or note it is a migration"
+                )
 
     # session logs: keep the active per-project log to <= 5 lines (older rotates to _session.cold.md)
     if os.path.isdir(projects_dir):
@@ -280,13 +371,31 @@ def main():
     except Exception as exc:  # never let the advisory check fail the validator
         warnings.append(f"compact consistency check skipped ({exc})")
 
-    # report
-    for w in warnings:
-        print(f"⚠ {w}")
-    for e in errors:
-        print(f"✗ {e}")
-
     total = sum(per_project.values())
+
+    # report
+    if report:
+        print("Project Brain — report")
+        print(f"  brain: {brain}")
+        print(f"  {total} topic file(s) across {len(per_project)} project folder(s)")
+        if errors:
+            print(f"\n  Errors ({len(errors)}) — must fix:")
+            for e in errors:
+                print(f"    ✗ {e}")
+        for key, title in REPORT_SECTIONS:
+            items = [w for w in warnings if categorize(w) == key]
+            if items:
+                print(f"\n  {title} ({len(items)}):")
+                for w in items:
+                    print(f"    ⚠ {w}")
+        if not errors and not warnings:
+            print("\n  ✓ clean — no errors, no warnings")
+    else:
+        for w in warnings:
+            print(f"⚠ {w}")
+        for e in errors:
+            print(f"✗ {e}")
+
     if errors:
         print(f"\n✗ {len(errors)} error(s), {len(warnings)} warning(s) across {total} topic file(s).")
         return 1

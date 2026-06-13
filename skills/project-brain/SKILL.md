@@ -128,7 +128,11 @@ python3 ~/.claude/skills/project-brain/brain-check [workspace]
 It checks that every pointer resolves, frontmatter is well-formed with a valid status, and the
 status in `index.md` matches the status in the topic file. It also flags (as advisory warnings)
 an invalid `trust:`, a topic past its staleness horizon, a `project:` that doesn't match its
-folder, and an `index.compact` that is missing or out of date with `index.md`. Add `--strict` to
+folder, an `index.compact` that is missing or out of date with `index.md`, and **conflicting facts**
+— a single project that names two of the same mutually-exclusive tech (a relational DB, or a host)
+across its index stack and topic files, which is usually a stale fact one place forgot to update.
+Add `--report` for a grouped, readable rundown (conflicts, staleness, orphans, …) instead of a flat
+list — same checks, easier to scan. Add `--strict` to
 additionally flag topics that name-drop another project without a
 `cross_refs:` (off by default — noisy on coupled brains). Exit code 1 = real errors to fix; warnings
 (staleness, provenance, cross-project, compact-drift, thin **and over-long** topics, session-log
