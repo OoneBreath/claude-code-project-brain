@@ -88,6 +88,9 @@ and offer to scope it to **one project at a time** rather than the whole workspa
      in <date> — worth re-checking?" rather than presenting it as current fact.
 6. For cross-cutting questions ("everything Redis", "all auth work"), grep topic-file
    frontmatter `tags:` rather than reading files whole.
+7. **Before proposing a choice** (a library, a host, an architecture), read the project's
+   `_decisions.md` and the brain-wide `decisions.md` (see *Decision log*) so you don't re-propose
+   an option that was already weighed and rejected.
 
 ### Mode: save — after completing work
 1. Identify project + topic (one topic = one meaningful unit of work, not every tiny edit).
@@ -108,10 +111,14 @@ and offer to scope it to **one project at a time** rather than the whole workspa
    to the **top** of `projects/<project>/_session.md`, then write a fresh `> resume <today> · done: …
    · next: … · blocker: …` under the project header in `index.md`. Keep `_session.md` to **5 active
    lines** — older lines rotate to the top of `projects/<project>/_session.cold.md` (cold storage).
-6. Regenerate the compact index so the fast path stays in sync — it is deterministic and free
+6. **If this save settled a real choice** (picked a host, a library, an architecture over alternatives),
+   append one newest-first line to `projects/<project>/_decisions.md` (or `.project-brain/decisions.md`
+   if brain-wide): `YYYY-MM: <chosen> > <rejected> — <why>` (see *Decision log*). Only for choices
+   someone might otherwise re-open — not every micro-pick.
+7. Regenerate the compact index so the fast path stays in sync — it is deterministic and free
    (no LLM, no tokens): `python3 ~/.claude/skills/project-brain/brain-compact [workspace]`.
    Always edit `index.md` (the source of truth); never hand-edit `index.compact`.
-7. Run `brain-check` (see Validate) so the index line and the topic file can't silently drift.
+8. Run `brain-check` (see Validate) so the index line and the topic file can't silently drift.
 
 ### Validate — keep the two sources of truth in sync
 Run the bundled validator any time, and especially after a `save`:
@@ -259,6 +266,33 @@ outside the EU." "Never store PII in Redis." These are `! never:` lines:
 
 They are deliberately few and short. If you find yourself writing many, most are probably ordinary
 notes (`trust: pref`) rather than inviolable constraints — keep `! never:` for the real lines.
+
+## Decision log — why, not just what (so rejected options stay rejected)
+
+A topic's version history records *what changed*. The decision log records *why a path was chosen and
+what was rejected*, so the rejected alternative is never quietly proposed again three months later.
+
+- **Where it lives:** a dedicated, append-style file — `projects/<project>/_decisions.md` for a
+  project decision, or `.project-brain/decisions.md` for a brain-wide one. These are **not** topics
+  (the per-project file is `_`-prefixed, so `brain-check` skips it; the brain-wide one sits beside the
+  index). They are **read on demand at planning time**, never loaded eagerly — which keeps the compact
+  lean and the generator a pure function of `index.md`.
+- **Format** — one line per decision, newest first:
+
+  ```
+  2026-06: OVH > Hetzner, DigitalOcean — client is EU-based and contractually EU-only
+  2026-05: Drizzle > Prisma — lighter, owns the SQL, no engine binary
+  ```
+
+  `YYYY-MM: <chosen> > <rejected[, …]> — <why>`. The value is the **why** and the **rejected** side.
+- **When you plan, read it first.** Before you propose or pick an approach, a library, a host, an
+  architecture for a project, **read that project's `_decisions.md` and the brain-wide
+  `decisions.md`**. If the option you're about to suggest is on the rejected side of a past decision,
+  don't propose it as if it were new — either honor the decision, or, if circumstances changed,
+  surface it explicitly: *"we chose OVH over Hetzner in 2026-06 for EU residency — has that changed?"*
+- **When a decision is made, log it.** On a save that settled a real choice, append one line. This is
+  not for every micro-pick — only choices someone might otherwise re-open. (A choice that must *never*
+  be reopened is a `! never:` hard rule instead.)
 
 ## Delta-load — only reload what changed
 
