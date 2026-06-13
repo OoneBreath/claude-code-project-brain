@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+"""brain-compact — (re)generate index.compact from index.md.
+
+index.md is the single source of truth; this writes a token-cheap index.compact that
+an agent reads at session start instead of the full markdown map. Generation is
+DETERMINISTIC and free — no LLM call, no tokens — so it is safe to run from a hook
+after every save. The flow is strictly one-way: md -> compact, never the reverse.
+
+If index.compact is missing or stale, nothing breaks: agents fall back to reading
+index.md. This script just keeps the fast path in sync.
+
+No third-party dependencies — Python 3 stdlib only.
+
+Usage:
+  brain-compact [PATH] [--stdout]
+      PATH      a .project-brain dir, a workspace containing one, or omitted (cwd)
+      --stdout  print the compact index instead of writing index.compact
+"""
+import os
+import sys
+from datetime import date
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _compact  # noqa: E402
+
+
+def main():
+    args = sys.argv[1:]
+    to_stdout = "--stdout" in args
+    positional = [a for a in args if not a.startswith("-")]
+    brain = _compact.find_brain(positional[0] if positional else None)
+    if not brain:
+        print("✗ No .project-brain found (looked in cwd / given path).", file=sys.stderr)
+        return 1
+
+    index = os.path.join(brain, "index.md")
+    if not os.path.isfile(index):
+        print(f"✗ Missing index.md in {brain}", file=sys.stderr)
+        return 1
+
+    compact = _compact.render_compact(_compact.read_text(index), date.today().isoformat())
+
+    if to_stdout:
+        sys.stdout.write(compact)
+        return 0
+
+    out_path = os.path.join(brain, "index.compact")
+    with open(out_path, "w", encoding="utf-8") as fh:
+        fh.write(compact)
+
+    n_proj = sum(1 for ln in compact.splitlines() if ln.startswith("P "))
+    print(f"✓ wrote {out_path} ({os.path.getsize(out_path)} B, {n_proj} project(s))")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -36,9 +36,11 @@ One brain can catalog **many projects** (a server hosting several repos) or just
 
 ## How to behave every session
 
-If `.project-brain/index.md` exists, **read it first** (it is small by design). It tells you
-what each project is, its stack, and what has already been done. Drill into a topic file
-only when you actually need that detail.
+If the brain exists, **read its index first** — it is small by design and tells you what each
+project is, its stack, and what has already been done. Prefer `.project-brain/index.compact`
+(a token-cheap, generated view); if it is missing or older than `index.md`, read `index.md`
+instead — they carry the same information, so the fallback never loses anything. Drill into a
+topic file only when you actually need that detail.
 
 When this skill is invoked, choose the mode that matches the request:
 
@@ -101,7 +103,10 @@ and offer to scope it to **one project at a time** rather than the whole workspa
 3. Update the matching line in `index.md`: status-with-outcome + date + version + pointer.
    Keep it to **one line**. All detail goes in the topic file, never in the index.
 4. If the project section doesn't exist in `index.md` yet, add it.
-5. Run `brain-check` (see Validate) so the index line and the topic file can't silently drift.
+5. Regenerate the compact index so the fast path stays in sync — it is deterministic and free
+   (no LLM, no tokens): `python3 ~/.claude/skills/project-brain/brain-compact [workspace]`.
+   Always edit `index.md` (the source of truth); never hand-edit `index.compact`.
+6. Run `brain-check` (see Validate) so the index line and the topic file can't silently drift.
 
 ### Validate — keep the two sources of truth in sync
 Run the bundled validator any time, and especially after a `save`:
@@ -110,10 +115,11 @@ python3 ~/.claude/skills/project-brain/brain-check [workspace]
 ```
 It checks that every pointer resolves, frontmatter is well-formed with a valid status, and the
 status in `index.md` matches the status in the topic file. It also flags (as advisory warnings)
-an invalid `trust:`, a topic past its staleness horizon, and a `project:` that doesn't match its
-folder. Add `--strict` to additionally flag topics that name-drop another project without a
+an invalid `trust:`, a topic past its staleness horizon, a `project:` that doesn't match its
+folder, and an `index.compact` that is missing or out of date with `index.md`. Add `--strict` to
+additionally flag topics that name-drop another project without a
 `cross_refs:` (off by default — noisy on coupled brains). Exit code 1 = real errors to fix; warnings
-(staleness, provenance, cross-project, thin topics, orphans, over-fragmentation) are advisory.
+(staleness, provenance, cross-project, compact-drift, thin topics, orphans, over-fragmentation) are advisory.
 
 ## index.md format
 
@@ -136,6 +142,37 @@ folder. Add `--strict` to additionally flag topics that name-drop another projec
 - `⚠ in-progress` — started, not finished
 - `✗ failed` — tried, did not work (kept so we don't repeat it)
 - `⨯ superseded` — replaced by a newer approach (see the topic's latest version)
+
+## The compact index (index.compact)
+
+`index.md` is the **single source of truth** — human-readable, hand-edited. Alongside it lives
+`index.compact`, a **generated** view that says the same thing in far fewer tokens (~60% smaller on
+a real multi-project brain). It is what you read at session start; the markdown is the fallback.
+
+- **One-way only:** `index.md` → `index.compact`, never the reverse. The compact file is compiled
+  output — never hand-edit it. Edit `index.md`, then regenerate.
+- **Regeneration is deterministic and free:** `brain-compact` is plain Python (stdlib), no LLM call,
+  zero tokens. Run it after any `save`, or wire it into a hook.
+- **Reading:** prefer `index.compact`; if it is missing or older than `index.md`, read `index.md`
+  — same information, so the fallback never loses anything (older brains with no compact still work).
+- **Format:** a self-describing legend block on top, then `P <name>  <stack·tags>` per project and
+  one line per topic `<topic> <status> <date> <vN>`. Status codes: `✓v` verified · `✓d` done ·
+  `⚠` in-progress · `✗` failed · `⨯` superseded. The pointer `projects/<name>/<topic>.md` is implied
+  and shown inline only when it differs.
+
+```
+# Project Brain — compact index · generated from index.md · DO NOT EDIT
+# legend: "P <name>  <stack·tags>" then one line/topic: "<topic> <status> <date> <vN>"
+#   status: ✓v=verified ✓d=done ⚠=in-progress ✗=failed ⨯=superseded
+#   pointer = projects/<name>/<topic>.md  (inline only when it differs)
+@src index.md  @gen 2026-06-13
+
+P acme-api  Node·tRPC·Drizzle·MySQL·Redis
+  cache ✓v 2026-05-12 v2
+  auth ⚠ 2026-05-20
+```
+
+`brain-check` warns (advisory) when `index.compact` is missing or out of date with `index.md`.
 
 ## Provenance & staleness — memory that knows what it doesn't know
 

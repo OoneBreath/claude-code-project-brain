@@ -31,6 +31,9 @@ import re
 import sys
 from datetime import date, datetime
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _compact  # noqa: E402  (shared dual-format index renderer, stdlib only)
+
 VALID_STATUS = ["verified", "done", "in-progress", "failed", "superseded"]
 VALID_TRUST = ["human", "ai-inferred"]
 REQUIRED_KEYS = {"project", "topic", "status", "version"}
@@ -224,6 +227,22 @@ def main():
     for proj, n in per_project.items():
         if n > MAX_TOPICS:
             warnings.append(f"project '{proj}' has {n} topics (>{MAX_TOPICS}) — consider consolidating")
+
+    # compact index: must reflect index.md (advisory — agents fall back to index.md if absent/stale)
+    compact_path = os.path.join(brain, "index.compact")
+    try:
+        expected = _compact.render_compact(read_text(index))
+        if not os.path.isfile(compact_path):
+            warnings.append(
+                "index.compact missing — run `brain-compact` to generate it "
+                "(agents read it first; they fall back to index.md, so this is advisory)"
+            )
+        elif _compact.data_lines(read_text(compact_path)) != _compact.data_lines(expected):
+            warnings.append(
+                "index.compact is out of date with index.md — run `brain-compact` to regenerate"
+            )
+    except Exception as exc:  # never let the advisory check fail the validator
+        warnings.append(f"compact consistency check skipped ({exc})")
 
     # report
     for w in warnings:

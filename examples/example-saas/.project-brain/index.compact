@@ -1,0 +1,11 @@
+# Project Brain — compact index · generated from index.md · DO NOT EDIT
+# legend: "P <name>  <stack·tags>" then one line/topic: "<topic> <status> <date> <vN>"
+#   status: ✓v=verified ✓d=done ⚠=in-progress ✗=failed ⨯=superseded
+#   pointer = projects/<name>/<topic>.md  (inline only when it differs)
+@src index.md  @gen 2026-06-13
+
+P acme-api  Node·tRPC·Drizzle·MySQL·Redis
+  cache ✓v 2026-05-12 v2
+  auth ⚠ 2026-05-20
+P acme-web  React·TypeScript·Vite·Tailwind
+  -
