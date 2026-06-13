@@ -136,6 +136,9 @@ additionally flag topics that name-drop another project without a
 - (no topics yet)
 ```
 
+**Optional tier markers** on a project header (see *Tiers* below): `## billing  (Go) {hot}` pins it
+HOT; `## legacy-api  (PHP) {archived}` makes it COLD. No marker = automatic tiering by recency.
+
 **Status legend** (carry the OUTCOME, not just "done"):
 - `✓ verified` — done and confirmed working
 - `✓ done` — done, not independently confirmed
@@ -162,17 +165,39 @@ a real multi-project brain). It is what you read at session start; the markdown 
 
 ```
 # Project Brain — compact index · generated from index.md · DO NOT EDIT
-# legend: "P <name>  <stack·tags>" then one line/topic: "<topic> <status> <date> <vN>"
+# legend: "<P> <name>  <stack·tags>" then one line/topic: "<topic> <status> <date> <vN>"
 #   status: ✓v=verified ✓d=done ⚠=in-progress ✗=failed ⨯=superseded
 #   pointer = projects/<name>/<topic>.md  (inline only when it differs)
+#   tiers:  P+ = HOT (active, full)  ·  P = WARM  ·  COLD (archived) omitted — read on demand
+#   when active projects > 15, WARM collapses to: P <name> <stack> · N topics, last <date>
 @src index.md  @gen 2026-06-13
 
-P acme-api  Node·tRPC·Drizzle·MySQL·Redis
+P+ acme-api  Node·tRPC·Drizzle·MySQL·Redis
   cache ✓v 2026-05-12 v2
   auth ⚠ 2026-05-20
 ```
 
 `brain-check` warns (advisory) when `index.compact` is missing or out of date with `index.md`.
+
+## Tiers — HOT / WARM / COLD (keeping the compact small at scale)
+
+A brain with many projects would make even the compact index big. Tiers bound that **automatically**
+— you don't manage them by hand (unlike the manual archiving below, which only drops a line):
+
+- **HOT** (`P+`, max 3) — the active projects, always rendered **in full**. Chosen automatically as
+  the 3 most recently active projects (latest topic date). Pin one with a `{hot}` marker in its
+  `index.md` header to force it HOT regardless of dates (useful for a project you just picked up).
+- **WARM** (`P`) — every other active project. Rendered in full while the brain is small; once there
+  are **more than 15 active projects**, WARM collapses to a one-liner (`P name stack · N topics, last
+  <date>`) so the compact stays light. The full detail is still in `index.md` and the topic files —
+  read it on demand.
+- **COLD** — archived projects (`{archived}` marker, or a name starting with `_`). **Never** in the
+  compact; read on demand only. This is the tier form of archiving.
+
+Tiering only shapes the **generated** compact — `index.md` always holds every project in full, so
+nothing is hidden from a deliberate read. Selection is deterministic (recency + pins, not the clock),
+so regeneration is stable. `brain-check` warns if more than 3 projects are pinned `{hot}` (only the
+first 3 are honored; the rest fall to WARM).
 
 ## Provenance & staleness — memory that knows what it doesn't know
 

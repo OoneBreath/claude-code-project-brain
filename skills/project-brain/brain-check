@@ -228,6 +228,17 @@ def main():
         if n > MAX_TOPICS:
             warnings.append(f"project '{proj}' has {n} topics (>{MAX_TOPICS}) — consider consolidating")
 
+    # tiers: more than HOT_MAX {hot} pins — only the first HOT_MAX are honored, extras go WARM
+    try:
+        pins = [p["name"] for p in _compact.parse_index(read_text(index)) if p["hot"]]
+        if len(pins) > _compact.HOT_MAX:
+            warnings.append(
+                f"{len(pins)} projects pinned {{hot}} but only {_compact.HOT_MAX} fit HOT — "
+                f"extras render as WARM: {', '.join(pins[_compact.HOT_MAX:])}"
+            )
+    except Exception as exc:
+        warnings.append(f"tier check skipped ({exc})")
+
     # compact index: must reflect index.md (advisory — agents fall back to index.md if absent/stale)
     compact_path = os.path.join(brain, "index.compact")
     try:

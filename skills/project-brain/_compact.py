@@ -27,10 +27,15 @@ STATUS_CODE = {
 
 HEADER_LINES = [
     "# Project Brain — compact index · generated from index.md · DO NOT EDIT",
-    '# legend: "P <name>  <stack·tags>" then one line/topic: "<topic> <status> <date> <vN>"',
+    '# legend: "<P> <name>  <stack·tags>" then one line/topic: "<topic> <status> <date> <vN>"',
     "#   status: ✓v=verified ✓d=done ⚠=in-progress ✗=failed ⨯=superseded",
     "#   pointer = projects/<name>/<topic>.md  (inline only when it differs)",
+    "#   tiers:  P+ = HOT (active, full)  ·  P = WARM  ·  COLD (archived) omitted — read on demand",
+    "#   when active projects > 15, WARM collapses to: P <name> <stack> · N topics, last <date>",
 ]
+
+HOT_MAX = 3            # at most this many projects are HOT (always full in compact)
+PROJECT_THRESHOLD = 15  # above this many ACTIVE projects, WARM collapses to keep compact small
 
 
 def find_brain(arg):
@@ -66,13 +71,24 @@ def parse_index(text):
         m = re.match(r"^##\s+(.*)$", line)
         if m:
             head = m.group(1).strip()
+            # optional trailing tier markers, e.g. "## billing (Go) {hot}" or "{archived}"
+            markers = set()
+            for grp in re.findall(r"\{([^}]*)\}", head):
+                markers.update(t.lower() for t in re.split(r"[,\s]+", grp.strip()) if t)
+            head = re.sub(r"\s*\{[^}]*\}", "", head).strip()
             mp = re.match(r"^(.*?)\s*\((.*)\)\s*$", head)
             if mp:
                 name = mp.group(1).strip()
                 stack = [p.strip() for p in re.split(r"·", mp.group(2)) if p.strip()]
             else:
                 name, stack = head, []
-            cur = {"name": name, "stack": stack, "topics": []}
+            cur = {
+                "name": name,
+                "stack": stack,
+                "topics": [],
+                "hot": "hot" in markers,
+                "archived": "archived" in markers or name.startswith("_"),
+            }
             projects.append(cur)
             continue
         if cur is None:
@@ -103,9 +119,44 @@ def parse_index(text):
     return projects
 
 
+def _recency(project):
+    """A project's most recent activity = the latest topic date (YYYY-MM-DD sorts lexically)."""
+    dates = [t["date"] for t in project["topics"] if t["date"]]
+    return max(dates) if dates else ""
+
+
+def assign_tiers(projects):
+    """Annotate each project with 'recency' and 'tier' (HOT | WARM | COLD). Deterministic.
+
+    COLD  = archived ({archived} marker or a name starting with '_') — never in compact.
+    HOT   = up to HOT_MAX active projects: {hot}-pinned first, then the most recently active.
+    WARM  = the remaining active projects.
+    """
+    for p in projects:
+        p["recency"] = _recency(p)
+    active = [p for p in projects if not p["archived"]]
+    pinned = [p for p in active if p["hot"]]
+    rest = [p for p in active if not p["hot"]]
+    # recency desc, name asc as a stable tiebreak — order of index.md must not change the tiers
+    rest = sorted(sorted(rest, key=lambda p: p["name"]), key=lambda p: p["recency"], reverse=True)
+    hot_ids = {id(p) for p in (pinned + rest)[:HOT_MAX]}
+    for p in projects:
+        if p["archived"]:
+            p["tier"] = "COLD"
+        elif id(p) in hot_ids:
+            p["tier"] = "HOT"
+        else:
+            p["tier"] = "WARM"
+    return projects
+
+
 def render_compact(text, gen_date=None):
-    """Render index.md text into the compact representation (deterministic)."""
+    """Render index.md text into the compact representation (deterministic, tier-aware)."""
     projects = parse_index(text)
+    assign_tiers(projects)
+    active = [p for p in projects if p["tier"] != "COLD"]
+    collapse_warm = len(active) > PROJECT_THRESHOLD
+
     out = list(HEADER_LINES)
     meta = "@src index.md"
     if gen_date:
@@ -113,9 +164,18 @@ def render_compact(text, gen_date=None):
     out.append(meta)
     out.append("")
     for p in projects:
-        head = "P " + p["name"]
+        if p["tier"] == "COLD":
+            continue  # archived: read on demand, never weigh on the eager budget
+        head = ("P+ " if p["tier"] == "HOT" else "P ") + p["name"]
         if p["stack"]:
             head += "  " + "·".join(p["stack"])
+        if p["tier"] == "WARM" and collapse_warm:
+            n = len(p["topics"])
+            tail = f"  · {n} topic{'' if n == 1 else 's'}"
+            if p["recency"]:
+                tail += f", last {p['recency']}"
+            out.append(head + tail)
+            continue
         out.append(head)
         if not p["topics"]:
             out.append("  -")
