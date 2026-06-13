@@ -35,12 +35,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _compact  # noqa: E402  (shared dual-format index renderer, stdlib only)
 
 VALID_STATUS = ["verified", "done", "in-progress", "failed", "superseded"]
-VALID_TRUST = ["human", "ai-inferred"]
+VALID_TRUST = ["human", "ai-inferred", "pref"]   # human=FACT · ai-inferred · pref=preference
 REQUIRED_KEYS = {"project", "topic", "status", "version"}
 FINISHED_STATUS = {"verified", "done"}   # only finished claims can go "stale"
 STALE_DAYS = 180                          # horizon used when a topic has no explicit review_by
 THIN_BYTES = 300
 MAX_TOPICS = 15
+MAX_BODY_LINES = 40                       # a topic longer than this wants splitting (memory hygiene)
 
 
 def find_brain(arg):
@@ -223,6 +224,13 @@ def main():
                 # --- advisory: size / orphan ---
                 if os.path.getsize(full) < THIN_BYTES:
                     warnings.append(f"{rel}: thin topic (<{THIN_BYTES} B) — consider merging")
+                body = text[m.end():] if (m := re.match(r"---\s*\n.*?\n---", text, re.S)) else text
+                body_lines = sum(1 for ln in body.splitlines() if ln.strip())
+                if body_lines > MAX_BODY_LINES:
+                    warnings.append(
+                        f"{rel}: {body_lines} body lines (>{MAX_BODY_LINES}) — too long, "
+                        f"split or trim (memory hygiene)"
+                    )
                 if rel not in linked:
                     warnings.append(f"{rel}: not linked from index.md (orphan)")
 

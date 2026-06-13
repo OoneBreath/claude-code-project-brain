@@ -4,9 +4,12 @@
 #   pointer = projects/<name>/<topic>.md  (inline only when it differs)
 #   tiers:  P+ = HOT (active, full)  ·  P = WARM  ·  COLD (archived) omitted — read on demand
 #   when active projects > 15, WARM collapses to: P <name> <stack> · N topics, last <date>
-@src index.md  @gen 2026-06-13
+#   ! <rule> = HARD RULE, never violate (brain-wide on top, or under a project) · ~ = session resume
+@src index.md  @gen 2026-06-13  @updated 2026-05-20
 
+! never: deploy outside the EU (client is GDPR-bound)
 P+ acme-api  Node·tRPC·Drizzle·MySQL·Redis
+  ! never: store PII in Redis
   ~ 2026-05-20 next: client silent refresh on 401 · blocker: refresh-token denylist store (Redis vs DB) undecided
   cache ✓v 2026-05-12 v2
   auth ⚠ 2026-05-20

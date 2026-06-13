@@ -3,7 +3,7 @@ project: <project-name>      # MUST match the folder under projects/ — a misma
 topic: <short-topic-slug>
 tags: [<tag1>, <tag2>]
 status: in-progress          # verified | done | in-progress | failed | superseded  (did the WORK succeed?)
-trust: ai-inferred           # human | ai-inferred  (WHO vouches for this note? absent = treat as ai-inferred)
+trust: ai-inferred           # human=FACT | ai-inferred | pref=preference  (absent = treat as ai-inferred)
 last_done: <YYYY-MM-DD>
 review_by: <YYYY-MM-DD>       # optional: re-confirm by this date, else brain-check flags it stale
 version: 1

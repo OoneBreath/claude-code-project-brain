@@ -32,6 +32,7 @@ HEADER_LINES = [
     "#   pointer = projects/<name>/<topic>.md  (inline only when it differs)",
     "#   tiers:  P+ = HOT (active, full)  ·  P = WARM  ·  COLD (archived) omitted — read on demand",
     "#   when active projects > 15, WARM collapses to: P <name> <stack> · N topics, last <date>",
+    "#   ! <rule> = HARD RULE, never violate (brain-wide on top, or under a project) · ~ = session resume",
 ]
 
 HOT_MAX = 3            # at most this many projects are HOT (always full in compact)
@@ -87,6 +88,7 @@ def parse_index(text):
                 "stack": stack,
                 "topics": [],
                 "resume": None,
+                "never": [],
                 "hot": "hot" in markers,
                 "archived": "archived" in markers or name.startswith("_"),
             }
@@ -97,6 +99,9 @@ def parse_index(text):
         ls = line.strip()
         if ls.startswith("> resume"):  # one-line session summary: done/next/blocker + date
             cur["resume"] = ls[len("> resume"):].strip()
+            continue
+        if re.match(r"^!\s*never\b", ls, re.I):  # hard rule scoped to this project
+            cur["never"].append(_never_text(ls))
             continue
         if not ls.startswith("-"):
             continue
@@ -121,6 +126,34 @@ def parse_index(text):
             {"slug": slug, "status": status, "date": date, "ver": ver, "pointer": pointer}
         )
     return projects
+
+
+def _never_text(line):
+    """Extract the rule from a `! never: <rule>` line (drop the marker, keep the rule)."""
+    s = line.strip()
+    if ":" in s:
+        return s.split(":", 1)[1].strip()
+    return re.sub(r"^!\s*never\b", "", s, flags=re.I).strip()
+
+
+def _brain_never(text):
+    """Brain-wide hard rules: `! never:` lines that appear before the first project header."""
+    rules = []
+    for line in text.splitlines():
+        s = line.strip()
+        if s.startswith("##"):
+            break
+        if re.match(r"^!\s*never\b", s, re.I):
+            rules.append(_never_text(s))
+    return rules
+
+
+def _resume_date(raw):
+    """The date token from a `> resume <date> · …` line, or '' if none."""
+    if not raw:
+        return ""
+    m = re.search(r"\b\d{4}-\d{2}-\d{2}\b", raw)
+    return m.group(0) if m else ""
 
 
 def _recency(project):
@@ -182,6 +215,18 @@ def assign_tiers(projects):
     return projects
 
 
+def _brain_updated(projects):
+    """Newest activity anywhere in the brain (latest topic or resume date) — the delta-load signal."""
+    dates = []
+    for p in projects:
+        if p["recency"]:
+            dates.append(p["recency"])
+        rd = _resume_date(p["resume"])
+        if rd:
+            dates.append(rd)
+    return max(dates) if dates else ""
+
+
 def render_compact(text, gen_date=None):
     """Render index.md text into the compact representation (deterministic, tier-aware)."""
     projects = parse_index(text)
@@ -193,8 +238,14 @@ def render_compact(text, gen_date=None):
     meta = "@src index.md"
     if gen_date:
         meta += f"  @gen {gen_date}"
+    updated = _brain_updated(projects)
+    if updated:
+        meta += f"  @updated {updated}"
     out.append(meta)
     out.append("")
+    # brain-wide hard rules first — they bind every project, so they lead the compact
+    for rule in _brain_never(text):
+        out.append(f"! never: {rule}")
     for p in projects:
         if p["tier"] == "COLD":
             continue  # archived: read on demand, never weigh on the eager budget
@@ -207,8 +258,12 @@ def render_compact(text, gen_date=None):
             if p["recency"]:
                 tail += f", last {p['recency']}"
             out.append(head + tail)
+            for rule in p["never"]:  # hard rules surface even when the project is collapsed
+                out.append(f"  ! never: {rule}")
             continue
         out.append(head)
+        for rule in p["never"]:
+            out.append(f"  ! never: {rule}")
         if p["tier"] == "HOT":  # surface "where we left off" only for the always-loaded HOT projects
             rs = _compact_resume(p["resume"])
             if rs:

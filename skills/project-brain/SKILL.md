@@ -124,7 +124,8 @@ an invalid `trust:`, a topic past its staleness horizon, a `project:` that doesn
 folder, and an `index.compact` that is missing or out of date with `index.md`. Add `--strict` to
 additionally flag topics that name-drop another project without a
 `cross_refs:` (off by default — noisy on coupled brains). Exit code 1 = real errors to fix; warnings
-(staleness, provenance, cross-project, compact-drift, thin topics, orphans, over-fragmentation) are advisory.
+(staleness, provenance, cross-project, compact-drift, thin **and over-long** topics, session-log
+overflow, orphans, over-fragmentation) are advisory.
 
 ## index.md format
 
@@ -133,7 +134,10 @@ additionally flag topics that name-drop another project without a
 
 > Read this first. Drill into projects/<name>/<topic>.md only when you need detail.
 
+! never: deploy outside the EU (client is GDPR-bound)
+
 ## acme-api  (Node · tRPC · Drizzle · MySQL · Redis)
+! never: store PII in Redis
 > resume 2026-05-20 · done: refresh endpoint · next: client silent refresh · blocker: denylist store
 - cache → Redis invalidation on ad update   [✓ verified 2026-05-12 · v2] → projects/acme-api/cache.md
 - auth  → tRPC session handling             [⚠ in-progress 2026-04-30]   → projects/acme-api/auth.md
@@ -144,6 +148,9 @@ additionally flag topics that name-drop another project without a
 
 The optional `> resume …` blockquote under a project header is the **one-line session summary** —
 where you left off (done / next / blocker + date). See *Session summaries* below.
+
+`! never: …` lines are **hard rules**: brain-wide if placed before the first `##`, or project-scoped
+under a header. They surface in the compact for every active project — see *Hard rules* below.
 
 **Optional tier markers** on a project header (see *Tiers* below): `## billing  (Go) {hot}` pins it
 HOT; `## legacy-api  (PHP) {archived}` makes it COLD. No marker = automatic tiering by recency.
@@ -179,16 +186,20 @@ a real multi-project brain). It is what you read at session start; the markdown 
 #   pointer = projects/<name>/<topic>.md  (inline only when it differs)
 #   tiers:  P+ = HOT (active, full)  ·  P = WARM  ·  COLD (archived) omitted — read on demand
 #   when active projects > 15, WARM collapses to: P <name> <stack> · N topics, last <date>
-@src index.md  @gen 2026-06-13
+#   ! <rule> = HARD RULE, never violate (brain-wide on top, or under a project) · ~ = session resume
+@src index.md  @gen 2026-06-13  @updated 2026-05-20
 
+! never: deploy outside the EU (client is GDPR-bound)
 P+ acme-api  Node·tRPC·Drizzle·MySQL·Redis
+  ! never: store PII in Redis
   ~ 2026-05-20 next: client silent refresh · blocker: denylist store
   cache ✓v 2026-05-12 v2
   auth ⚠ 2026-05-20
 ```
 
-The `~ …` line is the **session resume** (surfaced for HOT projects only — see *Session summaries*).
-`brain-check` warns (advisory) when `index.compact` is missing or out of date with `index.md`.
+The `! never: …` lines are **hard rules** (see *Hard rules*); `~ …` is the **session resume**;
+`@updated` is the newest activity in the brain (see *Delta-load*). `brain-check` warns (advisory)
+when `index.compact` is missing or out of date with `index.md`.
 
 ## Tiers — HOT / WARM / COLD (keeping the compact small at scale)
 
@@ -233,14 +244,50 @@ next*. After a working session, each touched project carries a single **one-line
 This makes resuming a project instant and keeps the rolling log from bloating the index — the same
 index-stays-lean principle as topic files.
 
+## Hard rules — `! never:` (constraints you must not break)
+
+Some memory isn't a note you weigh — it's a **constraint**. "This client is GDPR-bound, never deploy
+outside the EU." "Never store PII in Redis." These are `! never:` lines:
+
+- **Brain-wide** rules go before the first `## ` in `index.md` (they bind every project); **project**
+  rules go under a project header.
+- They render in the compact for **every active project — even a collapsed WARM one** — because a
+  broken hard rule is the worst possible failure, so they must always be in context, not on-demand.
+- **Treat them as absolute.** Before proposing or doing anything for a project, check its hard rules
+  (and the brain-wide ones) and never suggest an action that violates one. If a request conflicts with
+  a `! never:`, say so and stop — don't quietly work around it.
+
+They are deliberately few and short. If you find yourself writing many, most are probably ordinary
+notes (`trust: pref`) rather than inviolable constraints — keep `! never:` for the real lines.
+
+## Delta-load — only reload what changed
+
+You read the compact at the **start of every session** (it is cheap). You do **not** need to re-read
+every topic file every time. The compact carries an `@updated <date>` header (the newest activity
+anywhere in the brain), and every project shows its own latest date (topic dates, the `~` resume,
+or a collapsed WARM project's `last <date>`). Use them as a delta signal:
+
+- Your reference point is the **most recent `> resume` date you yourself wrote** last time here.
+- **Drill into a project only if its date is newer than that** — that's what actually changed since you
+  were last active. For everything unchanged, the compact line is enough; don't reopen topic files.
+- If nothing in the brain is newer than your last resume, just keep the **HOT** projects in context
+  and move on — there is no delta to load.
+
+This keeps a long-lived brain cheap to resume: the per-session cost tracks *what changed*, not the
+total size of the history.
+
 ## Provenance & staleness — memory that knows what it doesn't know
 
 `status` answers *"did the work succeed?"*. Two more (optional) fields answer *"can I trust this
 note, and is it still current?"* — the thing flat notes never tell you:
 
-- **`trust:`** — who vouches for the note. `human` = a person confirmed it (gospel). `ai-inferred`
-  (or absent) = the AI wrote it without confirmation; useful, but verify before relying on it. This
-  keeps a model's own guesses from hardening into "facts" just because they're written down.
+- **`trust:`** — what kind of claim this is and who vouches for it. Three values:
+  - `human` = **FACT**, a person confirmed it (gospel).
+  - `ai-inferred` (or absent) = the AI wrote it without confirmation; useful, but verify before relying.
+  - `pref` = **PREFERENCE** — the user's stated choice ("always OVH", "tabs not spaces"). Honor it as
+    the decision; it isn't a verifiable fact, so don't re-litigate it, but don't treat it as proof
+    either. (A hard, inviolable rule is a `! never:` line, not a `pref` — see *Hard rules*.)
+  This keeps a model's own guesses from hardening into "facts" just because they're written down.
 - **`review_by:`** — an optional expiry date. Past it (or, with no `review_by`, once `last_done` is
   older than ~180 days), `brain-check` flags a *finished* topic as stale: re-confirm before
   trusting. Memory with an expiry date, instead of treating last year's note as still true.
@@ -266,7 +313,7 @@ project: acme-api         # MUST match the folder under projects/
 topic: cache
 tags: [redis, invalidation, performance]
 status: verified          # verified | done | in-progress | failed | superseded  (did the work succeed?)
-trust: human              # human | ai-inferred  (who vouches for this? absent = ai-inferred)
+trust: human              # human=FACT | ai-inferred | pref=preference  (absent = ai-inferred)
 last_done: 2026-05-12
 review_by: 2026-11-12      # optional: re-confirm by this date, else flagged stale
 version: 2
