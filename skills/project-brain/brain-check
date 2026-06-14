@@ -27,11 +27,13 @@ Exit code: 0 = clean (warnings allowed), 1 = errors found.
 No third-party dependencies — Python 3 stdlib only.
 
 Usage:
-  brain-check [PATH] [--strict] [--report]
+  brain-check [PATH] [--strict] [--report] [--diff YYYY-MM-DD]
       PATH      a .project-brain dir, a workspace containing one, or omitted (cwd)
       --strict  also flag cross-project name-drops in topic bodies (noisy on coupled brains)
       --report  print a grouped, readable report (staleness, conflicts, orphans, …) instead
                 of a flat warning list — same checks, easier to scan
+      --diff D  instead of validating, list what changed on/after date D — new/updated topics,
+                session lines, resume lines, decisions, and people — from the brain's own dates
 """
 import os
 import re
@@ -108,9 +110,12 @@ def people_status(bracket):
 # --- conflict detector: mutually-exclusive tech a single project should not name two of ---
 # Deliberately small and high-signal: a relational DB swap or a host swap is the classic
 # "two places disagree" rot. Redis (a cache) is NOT here — it coexists with a real DB.
+# Only unambiguous tokens — see the lesson below. "oracle" was removed because it matches
+# component names like `oracle.py` / "oracle/scheduler" far more often than the database
+# (caught on a real brain: ETAP 9's first real-world test). Add ambiguous tech at your peril.
 TECH_GROUPS = {
     "relational-db": {"mysql", "mariadb", "postgres", "postgresql", "sqlite",
-                      "mssql", "oracle", "cockroachdb"},
+                      "mssql", "cockroachdb"},
     "host": {"ovh", "hetzner", "aws", "gcp", "azure", "digitalocean", "linode", "vultr"},
 }
 TECH_CANON = {"postgresql": "postgres"}
@@ -159,11 +164,105 @@ def categorize(msg):
     return "hygiene"  # thin/long topics, orphans, over-fragmentation, session-log overflow
 
 
+def run_diff(brain, cutoff):
+    """--diff: what changed in the brain since a date, from the brain's own dates (no git).
+
+    Scans dated artifacts — topic last_done, session lines, resume lines, decisions (YYYY-MM),
+    and people (status date + agreement lines) — and lists those on or after `cutoff`.
+    """
+    if parse_date(cutoff) is None:
+        print(f"✗ --diff needs a YYYY-MM-DD date, got '{cutoff}'", file=sys.stderr)
+        return 1
+    cut_ym = cutoff[:7]
+    index_text = read_text(os.path.join(brain, "index.md"))
+    sections = {}  # ordered-by-insertion label -> [lines]
+
+    def add(label, line):
+        sections.setdefault(label, []).append(line)
+
+    # topics + per-project session/decision logs
+    pdir = os.path.join(brain, "projects")
+    if os.path.isdir(pdir):
+        for root, _dirs, files in os.walk(pdir):
+            proj = os.path.basename(root)
+            for name in sorted(files):
+                if not name.endswith(".md"):
+                    continue
+                full = os.path.join(root, name)
+                if name in ("_session.md", "_session.cold.md"):
+                    for ln in read_text(full).splitlines():
+                        d = re.match(r"^(\d{4}-\d{2}-\d{2})\b", ln.strip())
+                        if d and d.group(1) >= cutoff:
+                            add("Session updates", f"{proj}: {ln.strip()}")
+                elif name == "_decisions.md":
+                    for ln in read_text(full).splitlines():
+                        d = re.match(r"^(\d{4}-\d{2})\b", ln.strip())
+                        if d and d.group(1) >= cut_ym:
+                            add("Decisions", f"{proj}: {ln.strip()}")
+                elif not name.startswith("_"):
+                    fm = parse_frontmatter(read_text(full)) or {}
+                    ld = fm.get("last_done")
+                    if ld and parse_date(ld) and ld >= cutoff:
+                        add("Topics", f"{proj}/{name[:-3]}  [{fm.get('status', '?')} · {ld}]")
+
+    # resume lines (current "where we left off") from index.md
+    for p in _compact.parse_index(index_text):
+        rd = _compact._resume_date(p["resume"])
+        if rd and rd >= cutoff:
+            add("Resume", f"{p['name']}: {p['resume']}")
+
+    # brain-wide decisions
+    bd = os.path.join(brain, "decisions.md")
+    if os.path.isfile(bd):
+        for ln in read_text(bd).splitlines():
+            d = re.match(r"^(\d{4}-\d{2})\b", ln.strip())
+            if d and d.group(1) >= cut_ym:
+                add("Decisions", f"(brain-wide): {ln.strip()}")
+
+    # people: relationship date + dated agreement lines
+    ppldir = os.path.join(brain, "people")
+    if os.path.isdir(ppldir):
+        for name in sorted(os.listdir(ppldir)):
+            if not name.endswith(".md") or name.startswith("_"):
+                continue
+            text = read_text(os.path.join(ppldir, name))
+            fm = parse_frontmatter(text) or {}
+            ld = fm.get("last_done")
+            if ld and parse_date(ld) and ld >= cutoff:
+                add("People", f"{name[:-3]}  [{fm.get('status', '?')} · {ld}]")
+            for ln in text.splitlines():
+                d = re.match(r"^-?\s*(\d{4}-\d{2})\b", ln.strip())
+                if d and d.group(1) >= cut_ym:
+                    add("People", f"{name[:-3]} agreed: {ln.strip().lstrip('- ')}")
+
+    print(f"Project Brain — changes since {cutoff}")
+    total = sum(len(v) for v in sections.values())
+    if not total:
+        print("  (nothing dated on or after that day)")
+        return 0
+    for label in ("Topics", "Resume", "Session updates", "Decisions", "People"):
+        if sections.get(label):
+            print(f"\n  {label} ({len(sections[label])}):")
+            for ln in sections[label]:
+                print(f"    · {ln}")
+    print(f"\n✓ {total} change(s) since {cutoff}.")
+    return 0
+
+
 def main():
     args = sys.argv[1:]
     strict = "--strict" in args
     report = "--report" in args
-    positional = [a for a in args if not a.startswith("-")]
+
+    diff_date = None
+    if "--diff" in args:
+        di = args.index("--diff")
+        if di + 1 < len(args) and not args[di + 1].startswith("-"):
+            diff_date = args[di + 1]
+        else:
+            print("✗ --diff needs a YYYY-MM-DD date (e.g. --diff 2026-05-01)", file=sys.stderr)
+            return 1
+    positional = [a for a in args if not a.startswith("-") and a != diff_date]
     arg = positional[0] if positional else None
     brain = find_brain(arg)
     if not brain:
@@ -174,6 +273,9 @@ def main():
     if not os.path.isfile(index):
         print(f"✗ Missing index.md in {brain}")
         return 1
+
+    if diff_date:  # --diff is its own focused view; it does not run the full validation
+        return run_diff(brain, diff_date)
 
     errors, warnings = [], []
     today = date.today()

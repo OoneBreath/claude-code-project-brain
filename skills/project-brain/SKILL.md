@@ -134,8 +134,10 @@ folder, an `index.compact` that is missing or out of date with `index.md`, and *
 — a single project that names two of the same mutually-exclusive tech (a relational DB, or a host)
 across its index stack and topic files, which is usually a stale fact one place forgot to update.
 Add `--report` for a grouped, readable rundown (conflicts, staleness, orphans, …) instead of a flat
-list — same checks, easier to scan. Add `--strict` to
-additionally flag topics that name-drop another project without a
+list — same checks, easier to scan. Add `--diff YYYY-MM-DD` to instead list **what changed since a
+date** — new/updated topics, session lines, resume lines, decisions, and people — read straight from
+the brain's own dates (no git needed), handy for "what did we touch since last week?". Add `--strict`
+to additionally flag topics that name-drop another project without a
 `cross_refs:` (off by default — noisy on coupled brains). Exit code 1 = real errors to fix; warnings
 (staleness, provenance, cross-project, compact-drift, thin **and over-long** topics, session-log
 overflow, orphans, over-fragmentation) are advisory.
