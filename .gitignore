@@ -11,3 +11,7 @@ __pycache__/
 .DS_Store
 *.local
 *.log
+
+# Never commit a generated context export — it can carry infra. Regenerate on demand.
+# Listed last so it overrides the examples re-include above (last matching pattern wins).
+context-export.md

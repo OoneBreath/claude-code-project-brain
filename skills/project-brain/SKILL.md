@@ -314,6 +314,29 @@ or a collapsed WARM project's `last <date>`). Use them as a delta signal:
 This keeps a long-lived brain cheap to resume: the per-session cost tracks *what changed*, not the
 total size of the history.
 
+## Export — paste the brain into another assistant
+
+A brain lives on disk; claude.ai / Gemini / ChatGPT can't read your files. `brain-export` bundles it
+into **one self-contained Markdown file** to paste into such a chat — the bridge for an agent with no
+filesystem.
+
+```
+python3 ~/.claude/skills/project-brain/brain-export [workspace] \
+    [--project NAME ...] [--max-tokens N] [--include-infra] [--stdout]
+```
+
+- It writes `<brain>/context-export.md` (or `--stdout`): the condensed **Map** (the compact index, with
+  its legend, so it's self-explaining) plus full detail for the **HOT** projects and any you add with
+  `--project` (even WARM/COLD ones).
+- **Safe by default.** Infra that shouldn't land in an external chat — IPs, ports, absolute paths,
+  hostnames, and secret-looking values (`PASSWORD=`, `API_KEY:`, tokens, AWS keys) — is **redacted** to
+  `[ip]`/`[port]`/`[path]`/`[host]`/`[redacted]`. The brain holds real server data; the export goes to
+  a third party — so you opt **in** to leaking, never out. `--include-infra` keeps it (only when you
+  trust the destination). Redaction is best-effort heuristics — skim the result before pasting.
+- `--max-tokens N` caps the size, keeping the most important parts first: **Map > HOT detail > named
+  projects**, truncating the tail with a note. Token figures are approximate (~4 chars/token; stdlib
+  has no real tokenizer).
+
 ## Provenance & staleness — memory that knows what it doesn't know
 
 `status` answers *"did the work succeed?"*. Two more (optional) fields answer *"can I trust this

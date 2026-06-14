@@ -1,0 +1,191 @@
+#!/usr/bin/env python3
+"""brain-export — bundle the brain into ONE pasteable context file for another assistant.
+
+A brain lives on disk; claude.ai / Gemini / ChatGPT can't read your files. This produces a single
+self-contained Markdown snapshot to paste into such a chat: the condensed map (compact index) plus
+full detail for the HOT projects and any you name with --project. It is the bridge for agents
+without a filesystem.
+
+SAFE BY DEFAULT: infra details that should not land in an external chat — IPs, ports, absolute
+paths, hostnames, and secret-looking values — are redacted. Pass --include-infra to keep them
+(only when you trust where this is going). Redaction is best-effort heuristics; skim the result.
+
+Token budgeting (--max-tokens N) keeps the most important parts: the map first, then HOT detail,
+then the projects you named — truncating the tail to fit. Token counts are approximate (stdlib has
+no real tokenizer; ~4 chars/token).
+
+No third-party dependencies — Python 3 stdlib only.
+
+Usage:
+  brain-export [PATH] [--project NAME ...] [--max-tokens N] [--include-infra] [--stdout]
+      PATH            a .project-brain dir, a workspace containing one, or omitted (cwd)
+      --project NAME  also include full detail for this project (repeatable), even if not HOT
+      --max-tokens N  cap the export at ~N tokens (priority: map > HOT > named projects)
+      --include-infra keep infra details (default: redact IPs/ports/paths/hosts/secrets)
+      --stdout        print to stdout instead of writing <brain>/context-export.md
+"""
+import os
+import re
+import sys
+from datetime import date
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _compact  # noqa: E402
+
+CHARS_PER_TOKEN = 4  # rough: stdlib has no real tokenizer, so token figures are approximate
+
+# Best-effort infra redaction, applied to the whole document unless --include-infra. Order matters:
+# secrets and structured tokens before the generic catch-alls.
+REDACTIONS = [
+    (re.compile(r'(?i)([\w-]*(?:password|passwd|secret|api[_-]?key|access[_-]?key|token|bearer|'
+                r'authoriz\w*)[\w-]*\s*[:=]\s*)"?\S+'), r'\1[redacted]'),
+    (re.compile(r'\bAKIA[0-9A-Z]{12,}\b'), '[redacted-key]'),
+    (re.compile(r'\b\d{1,3}(?:\.\d{1,3}){3}\b'), '[ip]'),
+    (re.compile(r'/(?:home|root|opt|var|etc|usr|srv|mnt|tmp)/[^\s)\'"`]*'), '[path]'),
+    (re.compile(r'\b[A-Za-z]:\\[^\s)\'"`]*'), '[path]'),
+    (re.compile(r'\b(?:[a-z0-9-]+\.)+(?:com|net|org|io|info|dev|app|co|uk|cloud|ai|sh|me|xyz|'
+                r'eu|de|tech|host)\b', re.I), '[host]'),
+    (re.compile(r'(?<=[\w\]]):\d{2,5}\b'), ':[port]'),
+    (re.compile(r'\b[A-Fa-f0-9]{32,}\b'), '[redacted-hash]'),
+    (re.compile(r'\b[A-Za-z0-9+/]{28,}={0,2}\b'), '[redacted-token]'),
+]
+
+
+def redact(text):
+    for pat, repl in REDACTIONS:
+        text = pat.sub(repl, text)
+    return text
+
+
+def strip_frontmatter(text):
+    m = re.match(r"---\s*\n(.*?)\n---\n?", text, re.S)
+    fm = {}
+    if m:
+        for line in m.group(1).splitlines():
+            if ":" in line and not line.strip().startswith("#"):
+                k, _, v = line.partition(":")
+                fm[k.strip()] = v.strip()
+        body = text[m.end():]
+    else:
+        body = text
+    return fm, body.strip()
+
+
+def project_block(brain, p):
+    """Self-contained detail for one project: header, hard rules, resume, then each topic body."""
+    head = f"### {p['name']}"
+    if p["stack"]:
+        head += f"  ({' · '.join(p['stack'])})"
+    lines = [head]
+    for rule in p["never"]:
+        lines.append(f"- **never:** {rule}")
+    if p["resume"]:
+        lines.append(f"- **resume:** {p['resume']}")
+    tdir = os.path.join(brain, "projects", p["name"])
+    if os.path.isdir(tdir):
+        for fn in sorted(os.listdir(tdir)):
+            if not fn.endswith(".md") or fn.startswith("_"):
+                continue
+            fm, body = strip_frontmatter(_compact.read_text(os.path.join(tdir, fn)))
+            meta = " · ".join(x for x in (fm.get("status"), fm.get("trust"),
+                                          ("v" + fm["version"]) if fm.get("version") else "") if x)
+            lines.append(f"\n**{fn[:-3]}**" + (f"  [{meta}]" if meta else ""))
+            lines.append(body)
+    return "\n".join(lines)
+
+
+def main():
+    args = sys.argv[1:]
+    flags = {"--include-infra", "--stdout"}
+    include_infra = "--include-infra" in args
+    to_stdout = "--stdout" in args
+
+    wanted, max_tokens = [], None
+    i = 0
+    positional = None
+    while i < len(args):
+        a = args[i]
+        if a == "--project" and i + 1 < len(args):
+            wanted.append(args[i + 1]); i += 2; continue
+        if a == "--max-tokens" and i + 1 < len(args):
+            try:
+                max_tokens = int(args[i + 1])
+            except ValueError:
+                print(f"✗ --max-tokens needs an integer, got '{args[i + 1]}'", file=sys.stderr)
+                return 1
+            i += 2; continue
+        if a not in flags and not a.startswith("-") and positional is None:
+            positional = a
+        i += 1
+
+    brain = _compact.find_brain(positional)
+    if not brain:
+        print("✗ No .project-brain found (looked in cwd / given path).", file=sys.stderr)
+        return 1
+    index = os.path.join(brain, "index.md")
+    if not os.path.isfile(index):
+        print(f"✗ Missing index.md in {brain}", file=sys.stderr)
+        return 1
+
+    index_text = _compact.read_text(index)
+    projects = _compact.assign_tiers(_compact.parse_index(index_text))
+    by_name = {p["name"]: p for p in projects}
+
+    header = (
+        "# Project Brain — context export\n\n"
+        f"> Snapshot generated {date.today().isoformat()} for pasting into another assistant "
+        "(claude.ai · Gemini · ChatGPT).\n"
+        "> It has no filesystem — everything it needs is in this file. `! never:` lines are hard "
+        "rules.\n"
+        + ("> Infra details (IPs, ports, paths, hosts, secrets) are **redacted**; "
+           "run with --include-infra to keep them.\n" if not include_infra
+           else "> ⚠ Includes infra details (--include-infra) — do not paste anywhere untrusted.\n")
+    )
+
+    # The header is our own boilerplate — never redact it (it legitimately names claude.ai etc.).
+    # Only brain CONTENT (the map + project detail) gets redacted.
+    out = ["## Map\n", "```", _compact.render_compact(index_text).rstrip("\n"), "```", ""]
+    budget = max_tokens * CHARS_PER_TOKEN if max_tokens else None
+    running = len(header) + sum(len(s) + 1 for s in out)
+
+    # priority order: HOT first, then any named projects not already HOT
+    ordered = [p for p in projects if p["tier"] == "HOT"]
+    seen = {p["name"] for p in ordered}
+    for name in wanted:
+        if name in by_name and name not in seen:
+            ordered.append(by_name[name]); seen.add(name)
+        elif name not in by_name:
+            out.append(f"> note: --project '{name}' not found in this brain.\n")
+
+    out.append("## Project details\n")
+    omitted = 0
+    for n, p in enumerate(ordered):
+        block = project_block(brain, p)
+        if budget and running + len(block) > budget and n > 0:
+            omitted = len(ordered) - n
+            break
+        out.append(block + "\n")
+        running += len(block) + 1
+    if omitted:
+        out.append(f"> … {omitted} project(s) omitted to fit --max-tokens {max_tokens}.\n")
+
+    body = "\n".join(out)
+    if not include_infra:
+        body = redact(body)
+    text = header + "\n" + body
+
+    approx = len(text) // CHARS_PER_TOKEN
+    if to_stdout:
+        sys.stdout.write(text)
+        return 0
+    out_path = os.path.join(brain, "context-export.md")
+    with open(out_path, "w", encoding="utf-8") as fh:
+        fh.write(text)
+    print(f"✓ wrote {out_path} ({len(text)} B, ~{approx} tokens, "
+          f"{len(ordered) - omitted}/{len(ordered)} project(s)"
+          f"{', infra REDACTED' if not include_infra else ', infra INCLUDED'})")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
