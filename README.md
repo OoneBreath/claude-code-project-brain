@@ -161,8 +161,9 @@ workspace root and it catalogs them all in one brain.
   adds stricter cross-project isolation. Zero dependencies, plain Python 3.
 - `brain-export` bundles the brain into one pasteable file for another assistant — infra redacted by
   default.
-- An optional `brain-nudge` Stop hook reminds you to save when a session changed files but the brain
-  wasn't updated. It only **suggests** — it never writes to the brain.
+- An optional `brain-nudge` Stop hook fires at the **end of a turn** (throttled, so it nudges once
+  after work, not every turn) and reminds you to save when a turn changed files but the brain wasn't
+  updated. It only **suggests** — it never writes to the brain.
 - **It doesn't bloat over time.** Topic files are cold storage — only the index is loaded eagerly, so the
   per-session cost is bounded by the index (kept small by the compact + tiers), not by how much history
   you keep. Tidy a dead topic by *archiving* it (drop its line from the index, keep the file).

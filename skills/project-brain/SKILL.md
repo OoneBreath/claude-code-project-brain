@@ -62,7 +62,21 @@ Use when no `.project-brain/` exists, or the user says "set up / init project br
 4. Append a tiny pointer to the workspace `CLAUDE.md` (create it if missing) using
    `templates/CLAUDE-snippet.md` — this is what makes future sessions read the map first.
    Keep the pointer to a few lines; never duplicate the map into it.
-5. Tell the user what you created, and that the brain fills in as you work.
+5. **Defer this workspace's native memory to the brain (optional, non-destructive).** Claude Code's
+   own per-project memory (`MEMORY.md`) competes with the brain and roughly doubles the per-session
+   token cost. With the user's ok, seed a small **conditional** redirect into THIS workspace's native
+   `MEMORY.md` so it points at the brain instead of duplicating facts. Same contract as the
+   `brain-bootstrap` tool:
+   - Idempotency marker `<!-- project-brain-redirect v1 -->`.
+   - Native memory empty/absent → write just the redirect stub.
+   - Marker already present → leave it untouched.
+   - It holds the user's own notes → **back them up** (`.bak-<timestamp>`) and **prepend** the
+     redirect; never delete or reorder their text.
+   Keep the stub generic ("if this workspace has a `.project-brain/`, it is the source of truth") so
+   it carries no absolute path and stays correct on any machine. To migrate native memory across
+   *other* existing projects on the machine, point the user at the on-demand `brain-bootstrap` script
+   — it only touches projects you ask it to, never silently.
+6. Tell the user what you created, and that the brain fills in as you work.
 
 **Optional DEEP backfill — only when the user explicitly asks** ("scan the project / populate the
 brain from the codebase"). This pre-fills topic files by reading the project, so it spends real
@@ -435,13 +449,16 @@ version: 2
 
 ## Optional: the save reminder (brain-nudge hook)
 
-A bundled `Stop` hook (`brain-nudge`) reminds you to keep the brain current. When a session changed
-files but `index.md` wasn't updated, it surfaces a one-time note: *"you did work — want to save any
-of it?"*. It **never writes to the brain and never blocks** — auto-saving everything would turn the
-map into a swamp. It only nudges; the human still decides what is worth keeping.
+A bundled `Stop` hook (`brain-nudge`) reminds you to keep the brain current. It fires at the **end of
+a turn** (not at session end) and is **throttled**, so when a turn changed files but `index.md` wasn't
+updated, it surfaces the note *once after the work* — *"you did work — want to save any of it?"* — not
+on every turn. It **never writes to the brain and never blocks** — auto-saving everything would turn
+the map into a swamp. It only nudges; the human still decides what is worth keeping.
 
 - Installed as a **plugin**, the hook is wired up automatically (`hooks/hooks.json`).
-- Installed as a **skill only**, add it yourself in `~/.claude/settings.json`:
+- Installed as a **skill**, `install.sh` wires it for you — it **merges** the hook into
+  `~/.claude/settings.json` (keeping your existing settings, idempotent, with a backup). If you ever
+  need to add it by hand:
   ```json
   { "hooks": { "Stop": [ { "hooks": [
     { "type": "command", "command": "~/.claude/skills/project-brain/brain-nudge" }
