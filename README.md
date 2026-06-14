@@ -6,6 +6,8 @@
 
 ![Project Brain in action — the agent reads the project map, recalls how the cache fix was done, and refuses to silently redo verified work](docs/demo.gif)
 
+<sub>Core recall flow shown above (read the map → recall with version history → refuse to redo verified work). See **[What's new in 2.0](#whats-new-in-20)** for the compact index, tiers, session resume, decisions, people, and infra-safe export.</sub>
+
 Project Brain gives your AI agent a small, navigable **map** of your projects — their stack, decisions,
 pitfalls, what's done, what failed, and where you left off — so it stops forgetting, stops mixing
 projects up, and stops re-reading a 1000-line README into context on every task.
