@@ -1,55 +1,106 @@
-# Project Brain — persistent memory for Claude Code
+# Project Brain — persistent, navigable memory for AI coding agents
 
 **Stop re-explaining your projects to the AI every session.**
 
-![Project Brain in action — Claude reads the project map, recalls how the cache fix was done, and refuses to silently redo verified work](docs/demo.gif)
+**Works with: Claude Code · Cursor · Windsurf · any file-reading agent.**
 
-Project Brain is a [Claude Code](https://claude.com/claude-code) skill that gives Claude a
-small, navigable map of your projects — their stack, decisions, pitfalls, and what's already
-been done — so it stops forgetting, stops mixing projects up, and stops re-reading a
-1000-line README into context on every single task.
+![Project Brain in action — the agent reads the project map, recalls how the cache fix was done, and refuses to silently redo verified work](docs/demo.gif)
 
-It is **not** a database, a server, or another AI wrapper. It's a convention plus a skill:
-a `.project-brain/` folder of plain markdown that Claude reads through an index, loading
-detail only when it's actually needed.
+Project Brain gives your AI agent a small, navigable **map** of your projects — their stack, decisions,
+pitfalls, what's done, what failed, and where you left off — so it stops forgetting, stops mixing
+projects up, and stops re-reading a 1000-line README into context on every task.
+
+It is **not** a database, a server, or another AI wrapper. It's a convention plus a skill: a
+`.project-brain/` folder of plain Markdown that any file-reading agent navigates through an index,
+loading detail only when it's actually needed. Zero dependencies, plain text, yours to read and commit.
+
+---
+
+## Why Project Brain — what a flat notes file (or an auto-summarizer) won't give you
+
+- **Status carries the outcome.** `✓ verified` vs `✗ failed` vs `⚠ in-progress` — the model knows the
+  difference between *"done and works"* and *"we tried that and it broke,"* and won't silently redo it.
+- **Provenance — it knows what it doesn't know.** Every note is `trust: human` (a person confirmed it),
+  `ai-inferred` (a guess — verify first), or `pref` (your stated preference). A model's guess can't
+  harden into "fact" just by being written down.
+- **Staleness — memory with an expiry date.** `review_by:` dates flag facts that have aged
+  (credentials, versions, "current" anything) instead of serving last year's note as gospel.
+- **A cross-project guard + conflict detector.** The multi-project case is where memory rots into
+  *wrong* answers — a fact from project A applied to project B. The validator catches misfiled notes
+  and flags a project that names two of the same exclusive tech (MySQL **and** Postgres? a stale fact).
+- **Index-first, bounded cost.** Only a small index is ever loaded eagerly; detail lives in topic files
+  read on demand. A generated **compact** index plus **HOT/WARM/COLD tiers** keep the per-session cost
+  bounded even as the brain grows to dozens of projects.
+- **Hard rules you can't break.** `! never: deploy outside the EU` — constraints, always in context.
+- **Decisions remember *why*.** A decision log keeps rejected alternatives rejected, so the agent stops
+  re-proposing the thing you already ruled out.
+- **It remembers people too** — what the client agreed, which vendor you're locked into.
+- **Resume instantly.** A one-line session summary (done / next / blocker) tells the agent exactly
+  where you left off.
+- **Portable & inspectable.** Plain Markdown + a zero-dependency Python validator (`brain-check`). Read
+  it, edit it, grep it, commit it to your repo, or export it into any chat. No lock-in, no opaque store.
 
 ---
 
 ## The problem
 
-Every new Claude Code session, on every project:
-
-- explain the architecture
-- explain the deployment
-- explain the stack
-- explain the history
-- explain the known pitfalls
-
-…again. And after a few hours of work the model starts mixing details between projects —
-this one is FastAPI + Postgres, that one is Node + tRPC + MySQL — and quietly redoing things
-you already finished last week.
+Every new session, on every project: explain the architecture, the deployment, the stack, the history,
+the known pitfalls… again. And after a few hours the model starts mixing details between projects —
+this one is FastAPI + Postgres, that one is Node + tRPC + MySQL — and quietly redoing things you
+finished last week.
 
 ## The fix
 
 ```
 .project-brain/
-  index.md                  # a small MAP: projects → topics → status + pointer
-  projects/
-    <project>/
-      <topic>.md            # the detail, read only when needed
+  index.md                  # a small MAP: projects → topics → status + pointer  (+ a generated index.compact)
+  projects/<project>/<topic>.md   # the detail, read only when needed
+  people/<slug>.md                # agreements with humans (client/partner/vendor)
 ```
 
-Claude reads the **small index** first. When you ask *"how did we solve the cache issue?"* it
-follows one pointer to one file — not the whole knowledge base. When you ask it to *"swap the
-logo"* and the map says that was done and verified three days ago, it tells you and asks
-whether you want to repeat it or do something new.
+The agent reads the **small index** first. Ask *"how did we solve the cache issue?"* and it follows one
+pointer to one file — not the whole knowledge base. Ask it to *"swap the logo"* when the map says that
+was done and verified three days ago, and it tells you and asks, instead of silently redoing it.
 
-**Before**
-> *Every session:* re-explain architecture, deployment, stack, history, pitfalls.
+---
 
-**After**
-> *Claude already knows:* the stack, what was done, what worked, what failed, what's in progress —
-> and reads only the one topic relevant to your question.
+## How is this different from native Session Memory / ClaudeMem?
+
+Auto-memory tools (a tool's built-in session memory, ClaudeMem, and similar) summarize your transcripts
+for you. That's genuinely zero-effort — and it's a different thing from what Project Brain is for. The
+honest trade:
+
+| | Auto session memory / ClaudeMem | **Project Brain** |
+|---|---|---|
+| How it's built | **Automatic** — summarizes your transcripts (zero effort) | **Curated** — a human chooses what's worth keeping |
+| What it is | A running **journal** of what happened | A **map of truth**: status (✓/✗), versions, decisions |
+| Trust | Undifferentiated | `human` (FACT) vs `ai-inferred` vs `pref` |
+| Freshness | No expiry | `review_by:` + staleness flags |
+| Multi-project | Mixes easily | Cross-project guard + conflict detector |
+| Reach | Tied to one tool | Plain Markdown — Claude Code, Cursor, Windsurf, any file-reading agent |
+| Ownership | Lives inside the tool | A folder you read, edit, grep, and **commit to your repo** |
+| Cost over time | Grows with history | Index-first + tiers — eager cost stays **bounded** |
+| Inspectable | Opaque | Every byte is yours to open and edit |
+
+They're complementary: auto-memory is a frictionless journal; Project Brain is the deliberate,
+inspectable, portable map you actually trust to plan against. If you want a human-curated source of
+truth that survives months and travels across tools, that's this.
+
+---
+
+## What's new in 2.0
+
+- **Dual-format index** — a generated, token-cheap `index.compact` the agent reads first (≈ −52% vs
+  `index.md` on a real multi-project brain), falling back to `index.md` if it's missing.
+- **HOT / WARM / COLD tiers** — the eager cost stays bounded as the brain grows past 15 projects.
+- **One-line session resume** — done / next / blocker, so you pick up exactly where you left off.
+- **Hard rules** (`! never:`), **`trust: pref`**, and **delta-load** (reload only what changed).
+- **Decision log** — why a path was chosen and what was rejected, so it isn't re-proposed.
+- **`brain-export`** — one pasteable file for claude.ai / Gemini / ChatGPT, infra redacted by default.
+- **`people/`** — first-class memory for agreements with clients, partners, and vendors.
+- **`brain-check --report`**, a **conflict detector**, and **`--diff <date>`** (what changed since when).
+
+Full details in the [CHANGELOG](CHANGELOG.md).
 
 ---
 
@@ -57,48 +108,14 @@ whether you want to repeat it or do something new.
 
 Be honest with yourself about why you'd use this:
 
-- **Fewer tokens — when it applies.** If you currently keep everything in a giant always-loaded
-  doc, splitting into a small index + on-demand topic files genuinely cuts per-session context.
-  If you don't, the token win is modest.
-- **Fewer hallucinations.** The map is an anchor. The model stops inventing your deployment or
-  swapping one project's stack for another's.
-- **Multi-month memory.** Come back to a project after three months and Claude still knows how it
-  works — without you pasting a kilometre of README.
-
-## What makes it better than a flat notes file
-
-1. **Status carries the outcome, not just "done":** `✓ verified` vs `✗ failed` vs `⚠ in-progress`.
-   The model knows the difference between *"done and works"* and *"we tried that and it broke."*
-2. **Versioning, not overwriting.** When an approach is replaced, the old one is kept as a
-   superseded note — so the trail of *what was tried and why it changed* survives.
-3. **Provenance — it knows what it doesn't know.** Every note can be marked `trust: human` (a person
-   confirmed it) or `ai-inferred` (the model wrote it without confirmation). A flat notes file blurs
-   the two, so a model's guess hardens into "fact" just by being written down. Two distinct things keep
-   them apart: `brain-check` validates that the field carries a real value (`human`/`ai-inferred`), and
-   then **Claude weighs it at read time** — trust the confirmed, double-check the inferred. That
-   weighing is a behavioral rule in the skill's recall instructions, not something the validator
-   enforces; the validator only guarantees the label is there and well-formed.
-4. **Staleness — memory with an expiry date.** Facts age: credentials rotate, versions move, "current"
-   stops being current. Topics carry a `review_by` date (or fall back to a ~180-day horizon), and the
-   validator flags anything past it as *"re-confirm before trusting"* instead of serving last year's
-   note as gospel.
-5. **A cross-project guard.** The multi-project case is where memory rots into *wrong* answers — a
-   fact from project A applied to project B. The validator catches misfiled notes (a `project:` that
-   doesn't match its folder). An opt-in `--strict` mode additionally flags a topic that name-drops
-   another project without declaring it — left **off by default on purpose**: in tightly-coupled
-   setups projects reference each other legitimately, so on a real interconnected brain it produces
-   false positives. Turn it on only when you want strict project isolation.
-6. **A save reminder that suggests, never auto-saves.** An optional `Stop` hook fires at the end of a
-   turn and, when the workspace changed files but the brain wasn't updated, reminds you to save *if
-   it's worth it* — throttled, so it nudges once after you've done work, not on every turn. It can't
-   write to the brain and can't act on its own — because auto-dumping every session would turn the
-   map into a swamp. A human still decides what's worth remembering.
-
-The validator (`brain-check`) is what keeps the structure honest: run it any time to catch index/topic
-drift, stale facts (#4), misfiled cross-project notes (#5), and a `trust:` field set to a bad value
-(#3) — no dependencies, plain Python 3. Note the scope: it checks structure and freshness; the
-trust-*weighing* in #3 and the save *nudge* in #6 are behaviors at read/turn time, not validator
-checks.
+- **Fewer tokens — when it applies.** If you keep everything in a giant always-loaded doc, splitting
+  into a small index + on-demand topic files genuinely cuts per-session context; the compact and tiers
+  cut it further on big brains. If your brain is tiny, the win is modest (and the compact's fixed legend
+  can even make it slightly larger — it's built for accumulated content).
+- **Fewer hallucinations.** The map is an anchor. The model stops inventing your deployment or swapping
+  one project's stack for another's — and the conflict detector catches it when a fact drifts.
+- **Multi-month memory.** Come back after three months and the agent still knows how it works — without
+  you pasting a kilometre of README.
 
 ---
 
@@ -110,8 +127,7 @@ cd claude-code-project-brain
 ./install.sh        # copies the skill into ~/.claude/skills/  (run on each machine)
 ```
 
-**Start a new Claude Code session after installing** — skills are loaded at session start, so the
-skill won't show up in a session that was already open.
+**Start a new Claude Code session after installing** — skills load at session start.
 
 Then, in a session inside your workspace:
 
@@ -121,79 +137,61 @@ Then, in a session inside your workspace:
 ```
 
 Run `init` once **per workspace**. The skill is installed per machine (`~/.claude/skills/`), but the
-memory (`.project-brain/`) lives per project — so on a server hosting several repos, point `init` at
-the workspace root and it catalogs them all in one brain.
+memory (`.project-brain/`) lives per project — so on a server hosting several repos, point `init` at the
+workspace root and it catalogs them all in one brain.
 
-After that you mostly don't think about it: Claude reads the map at the start, checks it before
-redoing work, and updates it when a unit of work is done.
-
-> **A note on the first run.** `init` is light by design — it detects your projects from
-> `package.json` / `pyproject.toml` / git and writes a small index. It does **not** read your
-> source, so it's cheap. The brain then fills in gradually as you actually work.
->
-> If you want Claude to pre-populate the brain by reading an existing codebase ("deep backfill"),
-> that's a one-time upfront token cost — Claude has to read your code and docs to summarise them.
-> Think of it as an investment: you pay tokens once to get organised, and every later session is
-> cheaper and sharper. Scope it to one project at a time. The skill will warn you before doing it.
->
-> The result reflects what your project actually documents — a repo with a solid README/CHANGELOG
-> backfills richer than a bare one. It summarises what's there; it doesn't invent context. So expect
-> the depth to vary by project, not a fixed result.
+> **First run is light by design.** `init` detects your projects from `package.json` / `pyproject.toml`
+> / git and writes a small index — it does **not** read your source. Ask it to "scan the project" for a
+> one-time deep backfill that reads your docs/code to pre-fill topics; it summarises what's there, it
+> doesn't invent context, so depth varies by how well a repo is documented.
 
 ## How it works
 
 - The skill lives in `~/.claude/skills/project-brain/` (personal scope, per machine).
-- `init` creates `.project-brain/` in your workspace, detects projects (git repos, `package.json`,
-  `pyproject.toml`, …), and drops a tiny pointer into your `CLAUDE.md` so future sessions read the
-  map first.
-- One brain can catalog **many projects on one server** or just a single repo.
-- Everything is plain markdown you can read, edit, and commit yourself.
-- A bundled `brain-check` validator (`python3 ~/.claude/skills/project-brain/brain-check`) catches
-  broken pointers, malformed frontmatter, index↔topic status drift, stale facts, an invalid `trust:`
-  value, and misfiled (cross-project) notes — run it after big changes. Add `--strict` for stricter
-  cross-project isolation (flags inter-project mentions; noisy on coupled brains, so off by default).
-- An optional `brain-nudge` Stop hook fires at the end of a turn and reminds you to save when the
-  workspace changed files but the brain wasn't updated — throttled, so it nudges once after work, not
-  every turn. Auto-wired if you install as a Claude Code **plugin**; skill-only users can add a
-  one-line `Stop` hook to `settings.json` (see the skill's own `SKILL.md`). It only suggests — it
-  never writes to the brain.
-- **It doesn't bloat over time.** Topic files are cold storage — only the index is ever loaded
-  eagerly, so the per-session cost is bounded by the index, not by how much history you keep.
-  Unlike a flat `notes.md` that gets heavier every session, the brain stays light. To tidy a dead
-  topic you *archive* it (drop its one line from the index, keep the file) — nothing auto-deletes.
+- `index.md` is the hand-edited **source of truth**. `brain-compact` regenerates `index.compact` from it
+  — one-way, deterministic, zero tokens (no LLM call). The agent reads the compact first and falls back
+  to `index.md` if it's missing or stale, so nothing ever breaks.
+- One brain can catalog **many projects on one server** or a single repo. Everything is plain Markdown
+  you can read, edit, and commit.
+- `brain-check` (`python3 ~/.claude/skills/project-brain/brain-check`) validates the brain — broken
+  pointers, malformed frontmatter, index↔topic drift, stale facts, misfiled cross-project notes, tech
+  conflicts, people records. `--report` groups it readably; `--diff <date>` shows what changed; `--strict`
+  adds stricter cross-project isolation. Zero dependencies, plain Python 3.
+- `brain-export` bundles the brain into one pasteable file for another assistant — infra redacted by
+  default.
+- An optional `brain-nudge` Stop hook reminds you to save when a session changed files but the brain
+  wasn't updated. It only **suggests** — it never writes to the brain.
+- **It doesn't bloat over time.** Topic files are cold storage — only the index is loaded eagerly, so the
+  per-session cost is bounded by the index (kept small by the compact + tiers), not by how much history
+  you keep. Tidy a dead topic by *archiving* it (drop its line from the index, keep the file).
 
-> **Your brain is yours — and it's private by default.** A real `.project-brain/` ends up holding
-> infra details (DB names, ports, server paths, hostnames). Decide per project whether to commit it
-> (travels with the repo, shared with your team) or keep it out of version control. This repo ships
-> a `.gitignore` that ignores `.project-brain/` precisely so the skill's own repo never accidentally
-> carries a real brain.
+> **Your brain is yours — and private by default.** A real `.project-brain/` ends up holding infra
+> details (DB names, ports, server paths, hostnames). Decide per project whether to commit it (travels
+> with the repo, shared with your team) or keep it out of version control. This repo ships a `.gitignore`
+> that keeps a real brain — and any `brain-export` output — out of the skill's own repo.
 
 ---
 
 ## Works across tools (same brain, different agents)
 
-Because a brain is just a `.project-brain/` folder of Markdown on disk, it isn't tied to one tool.
-Any agent that can read files in the workspace can read the brain — and a capable one can also write
-to it and run the validator. I tested this on a single server with several agents in separate sessions:
+Because a brain is just a `.project-brain/` folder of Markdown on disk, it isn't tied to one tool. Any
+agent that can read files in the workspace can read the brain — and a capable one can also write to it
+and run the validator. Tested on a single server with several agents in separate sessions:
 
 - **Claude Code** — full cycle: reads the brain, writes new topics with correct frontmatter, runs
   `brain-check`.
-- **Windsurf** — same full cycle, and the saved state persisted across a restart (wrote a new topic,
-  validator passed, reopened the session and the brain was intact).
-- **A third agent from another vendor** — connected over SSH and read the brain correctly, pulling
-  the right project details on demand.
+- **Windsurf** — same full cycle, and the saved state persisted across a restart.
+- **A third agent from another vendor** — connected over SSH and read the brain correctly on demand.
 
-So one brain can back several tools at once: write something in one agent, and the next agent — even
-a different one — picks up the same map, status flags, and history. The `project-brain` skill itself
-(install, init, hooks) is built for Claude Code, but the underlying convention (the Markdown layout +
-the validator) travels to any file-reading agent.
+The `project-brain` skill itself (install, init, hooks) is built for Claude Code, but the underlying
+convention (the Markdown layout + the validator) travels to any file-reading agent. And `brain-export`
+turns the brain into a single pasteable file for assistants with no filesystem at all (claude.ai /
+Gemini / ChatGPT).
 
 **The honest limit — the model matters more than the tool.** This works when the agent is driven by a
-capable model with real tool use. I tried a small local 7B model and it failed: it couldn't reliably
-run the read → use → write loop, and instead of admitting it couldn't read a file, it started
-inventing the brain's contents. So the convention is portable, but the full read-and-manage loop needs
-a model that can actually do agentic tool use. Reading a brain is nearly universal; managing one well
-is not. The memory is only as good as the model reading it.
+capable model with real tool use. A small local 7B model failed: it couldn't run the read → use → write
+loop and started inventing the brain's contents. Reading a brain is nearly universal; managing one well
+needs a model that can actually do agentic tool use.
 
 ---
 
@@ -202,9 +200,9 @@ is not. The memory is only as good as the model reading it.
 Project Brain came out of running several independent SaaS products at once — among them
 [Sentinel AI](https://sentinel-ai.info) (server security & database autopilot) and
 [24ad.info](https://24ad.info) (an AI-assisted classifieds platform), alongside a multi-server
-fleet-intelligence backend, an anti-spam service and a content tool. When every project carries
-thousands of lines of context, the cost of the AI forgetting — or quietly mixing two projects up
-— is real. This is the working memory that keeps them straight. The pattern isn't theoretical.
+fleet-intelligence backend, an anti-spam service, and a content tool. When every project carries
+thousands of lines of context, the cost of the AI forgetting — or quietly mixing two projects up — is
+real. This is the working memory that keeps them straight. The pattern isn't theoretical.
 
 ## Author
 
