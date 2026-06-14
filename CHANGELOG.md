@@ -3,6 +3,34 @@
 All notable changes to Project Brain are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); the project uses semantic-ish versioning.
 
+## [2.1.0] — 2026-06-14
+
+Quality-of-life release that finishes wiring the brain into Claude Code's own machinery. **Backward
+compatible**, still **zero runtime dependencies** for the brain itself (the installer uses `node`,
+which Claude Code already ships, instead of `jq`).
+
+### Added
+- **`install.sh` now wires the `brain-nudge` Stop hook for skill installs.** Previously only the plugin
+  path registered it (via `hooks/hooks.json`); a skill-only install shipped the hook but never ran it.
+  The installer now **merges** the hook into `~/.claude/settings.json` — it preserves existing keys
+  (permissions, model, …), is idempotent (skips if already present), backs up and prints a diff before
+  writing, and leaves a corrupt/foreign settings.json untouched. Merge is done with `node` (a hard
+  Claude Code dependency), so no `jq` is required.
+- **`brain-bootstrap` — point Claude Code's native per-project memory at the brain, non-destructively.**
+  An on-demand tool that seeds a small, **conditional** redirect ("if this workspace has a
+  `.project-brain/`, that is the source of truth") into native `MEMORY.md` so it defers to the brain
+  instead of competing with it and doubling per-session tokens. It never reverse-engineers the internal
+  `<encoded-cwd>` directory name (not safely reversible); it globs the memory dirs Claude already
+  created, so it is OS-agnostic. Contract: empty/absent → write stub; our marker present → skip
+  (idempotent); existing user notes → back up (`.bak-<ts>`) and **prepend** the redirect, never delete
+  or reorder. Proven on simulated foreign paths and with real user notes preserved byte-identical.
+- **Init-time seeding (opt-in).** `init` mode now offers, with the user's ok, to seed the same
+  non-destructive native→brain redirect for the current workspace.
+
+### Changed
+- Docs: the `brain-nudge` hook is now described accurately as an **end-of-turn, throttled** reminder
+  (it nudges once after work, not "at session end" and not every turn), in both README and SKILL.md.
+
 ## [2.0.0] — 2026-06-14
 
 Project Brain 2.0 — a major release built in ten stages. **Backward compatible:** every existing
