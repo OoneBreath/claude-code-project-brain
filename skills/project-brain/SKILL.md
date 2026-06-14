@@ -29,6 +29,8 @@ A `.project-brain/` directory at the workspace (or repo) root:
   projects/
     <project>/
       <topic>.md            # Detail: problem, solution, status, version, tags
+  people/
+    <slug>.md               # Agreements with humans (client/partner/vendor): who, context, status
 ```
 
 One brain can catalog **many projects** (a server hosting several repos) or just **one**
@@ -254,6 +256,28 @@ next*. After a working session, each touched project carries a single **one-line
 
 This makes resuming a project instant and keeps the rolling log from bloating the index — the same
 index-stays-lean principle as topic files.
+
+## People — agreements with humans (beside projects)
+
+Not all memory is about code. Who the client is, what a partner agreed to, the vendor you're locked
+into — that context matters and gets forgotten too. People live in `people/<slug>.md`, one file per
+person, catalogued in their own `# People` section of `index.md`:
+
+```
+# People
+- jane-doe → client · Acme Corp · billing + annual contract  [active 2026-06-10]  → people/jane-doe.md
+- bob-dns  → vendor · DNS + mail relay                        [paused 2026-03-01]  → people/bob-dns.md
+```
+
+- **Same rules as topics.** A person file uses the same frontmatter spirit — `trust:` (human/ai-inferred/
+  pref), optional `review_by:` for staleness — and `brain-check` validates it the same way (frontmatter
+  present, person matches filename, orphans, staleness). Create one from `templates/person.md`.
+- **Status is the relationship, not the work:** `active | prospect | paused | closed` (not
+  verified/done). Required frontmatter: `person` (= filename), `status`, `version`.
+- **In the compact** they appear as a `@people` block — `@ <slug> <status> <date>` — so the agent knows
+  who's who at session start; the agreements (dated, newest first) are detail in the file, read on demand.
+- **Recall/save** them like projects: when something is agreed with a person, add a dated line to their
+  file and refresh the `[status date]` in the `# People` index, then regenerate the compact.
 
 ## Hard rules — `! never:` (constraints you must not break)
 

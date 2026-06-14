@@ -25,6 +25,8 @@ STATUS_CODE = {
     "superseded": "⨯",
 }
 
+PEOPLE_STATUS = ["active", "prospect", "paused", "closed"]   # relationship state, not work state
+
 HEADER_LINES = [
     "# Project Brain — compact index · generated from index.md · DO NOT EDIT",
     '# legend: "<P> <name>  <stack·tags>" then one line/topic: "<topic> <status> <date> <vN>"',
@@ -33,6 +35,7 @@ HEADER_LINES = [
     "#   tiers:  P+ = HOT (active, full)  ·  P = WARM  ·  COLD (archived) omitted — read on demand",
     "#   when active projects > 15, WARM collapses to: P <name> <stack> · N topics, last <date>",
     "#   ! <rule> = HARD RULE, never violate (brain-wide on top, or under a project) · ~ = session resume",
+    "#   @ <name> <status> <date> = person (people/<name>.md) · status: active|prospect|paused|closed",
 ]
 
 HOT_MAX = 3            # at most this many projects are HOT (always full in compact)
@@ -69,6 +72,11 @@ def parse_index(text):
     projects = []
     cur = None
     for line in text.splitlines():
+        # an H1 heading (e.g. "# People") ends the project area, so its "- " lines aren't
+        # swallowed as topics of the last project. "## " project headers are handled below.
+        if re.match(r"^#(?!#)\s", line):
+            cur = None
+            continue
         m = re.match(r"^##\s+(.*)$", line)
         if m:
             head = m.group(1).strip()
@@ -134,6 +142,45 @@ def _never_text(line):
     if ":" in s:
         return s.split(":", 1)[1].strip()
     return re.sub(r"^!\s*never\b", "", s, flags=re.I).strip()
+
+
+def parse_people(text):
+    """Parse the `# People` section of index.md → [{slug, status, date, pointer}].
+
+    People are agreements with humans (client/partner/vendor), catalogued beside projects. They live
+    in the index so the compact (a pure function of index.md) can surface them; detail is in people/.
+    """
+    people = []
+    in_people = False
+    for line in text.splitlines():
+        s = line.strip()
+        if re.match(r"^#\s+People\s*$", s, re.I):
+            in_people = True
+            continue
+        if s.startswith("#"):          # any other heading closes the section
+            in_people = False
+            continue
+        if not in_people or not s.startswith("-"):
+            continue
+        body = s[1:].strip()
+        if not body or body.startswith("("):
+            continue
+        slug = re.split(r"→", body)[0].strip()
+        slug = slug.split()[0] if slug.split() else slug
+        status = date = pointer = None
+        mb = re.search(r"\[([^\]]*)\]", body)
+        if mb:
+            for st in PEOPLE_STATUS:
+                if st in mb.group(1):
+                    status = st
+                    break
+            md = re.search(r"\d{4}-\d{2}-\d{2}", mb.group(1))
+            date = md.group(0) if md else None
+        mptr = re.search(r"(people/\S+\.md)", body)
+        if mptr:
+            pointer = mptr.group(1)
+        people.append({"slug": slug, "status": status, "date": date, "pointer": pointer})
+    return people
 
 
 def _brain_never(text):
@@ -234,13 +281,16 @@ def render_compact(text, gen_date=None):
     active = [p for p in projects if p["tier"] != "COLD"]
     collapse_warm = len(active) > PROJECT_THRESHOLD
 
+    people = parse_people(text)
+
     out = list(HEADER_LINES)
     meta = "@src index.md"
     if gen_date:
         meta += f"  @gen {gen_date}"
-    updated = _brain_updated(projects)
-    if updated:
-        meta += f"  @updated {updated}"
+    updated_dates = [d for d in [_brain_updated(projects)] if d]
+    updated_dates += [pe["date"] for pe in people if pe["date"]]
+    if updated_dates:
+        meta += f"  @updated {max(updated_dates)}"
     out.append(meta)
     out.append("")
     # brain-wide hard rules first — they bind every project, so they lead the compact
@@ -280,6 +330,19 @@ def render_compact(text, gen_date=None):
             if t["pointer"] and t["pointer"] != default:
                 parts.append(t["pointer"])
             out.append("  " + " ".join(parts))
+
+    # people — agreements with humans, catalogued beside projects (detail in people/<slug>.md)
+    if people:
+        out.append("@people")
+        for person in people:
+            parts = [person["slug"]]
+            for key in ("status", "date"):
+                if person[key]:
+                    parts.append(person[key])
+            default = f"people/{person['slug']}.md"
+            if person["pointer"] and person["pointer"] != default:
+                parts.append(person["pointer"])
+            out.append("@ " + " ".join(parts))
     return "\n".join(out) + "\n"
 
 

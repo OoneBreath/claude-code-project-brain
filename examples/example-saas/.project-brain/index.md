@@ -13,3 +13,6 @@
 
 ## acme-web  (React · TypeScript · Vite · Tailwind)
 - (no topics yet)
+
+# People
+- jane-doe → client · Acme Corp · billing + annual contract  [active 2026-06-10] → people/jane-doe.md

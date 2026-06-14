@@ -5,7 +5,8 @@
 #   tiers:  P+ = HOT (active, full)  ·  P = WARM  ·  COLD (archived) omitted — read on demand
 #   when active projects > 15, WARM collapses to: P <name> <stack> · N topics, last <date>
 #   ! <rule> = HARD RULE, never violate (brain-wide on top, or under a project) · ~ = session resume
-@src index.md  @gen 2026-06-13  @updated 2026-05-20
+#   @ <name> <status> <date> = person (people/<name>.md) · status: active|prospect|paused|closed
+@src index.md  @gen 2026-06-14  @updated 2026-06-10
 
 ! never: deploy outside the EU (client is GDPR-bound)
 P+ acme-api  Node·tRPC·Drizzle·MySQL·Redis
@@ -15,3 +16,5 @@ P+ acme-api  Node·tRPC·Drizzle·MySQL·Redis
   auth ⚠ 2026-05-20
 P+ acme-web  React·TypeScript·Vite·Tailwind
   -
+@people
+@ jane-doe active 2026-06-10

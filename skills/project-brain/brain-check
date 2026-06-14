@@ -17,6 +17,8 @@ Checks:
     projects (> 15 topics), and session-log overflow (> 5 active lines)
   - conflict detector: a single project that names two of the same mutually-exclusive tech
     (a relational DB, or a host) across its index stack and topic files — likely a stale fact
+  - people/<slug>.md: valid frontmatter (person/status/version), a relationship status
+    (active|prospect|paused|closed), person matches the filename, staleness, and orphans
 
 Backward compatible: the new provenance/staleness/cross-project/conflict signals are WARNINGS,
 never errors, and only fire on fields a brain actually uses — older brains keep passing untouched.
@@ -40,8 +42,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _compact  # noqa: E402  (shared dual-format index renderer, stdlib only)
 
 VALID_STATUS = ["verified", "done", "in-progress", "failed", "superseded"]
+PEOPLE_STATUS = ["active", "prospect", "paused", "closed"]   # relationship state for people/
 VALID_TRUST = ["human", "ai-inferred", "pref"]   # human=FACT · ai-inferred · pref=preference
 REQUIRED_KEYS = {"project", "topic", "status", "version"}
+PEOPLE_REQUIRED = {"person", "status", "version"}
 FINISHED_STATUS = {"verified", "done"}   # only finished claims can go "stale"
 STALE_DAYS = 180                          # horizon used when a topic has no explicit review_by
 THIN_BYTES = 300
@@ -94,6 +98,13 @@ def index_status(bracket):
     return None
 
 
+def people_status(bracket):
+    for s in PEOPLE_STATUS:
+        if s in bracket:
+            return s
+    return None
+
+
 # --- conflict detector: mutually-exclusive tech a single project should not name two of ---
 # Deliberately small and high-signal: a relational DB swap or a host swap is the classic
 # "two places disagree" rot. Redis (a cache) is NOT here — it coexists with a real DB.
@@ -133,7 +144,7 @@ def categorize(msg):
     m = msg.lower()
     if "conflict" in m:  # "conflicting <group> …" and "conflict check skipped …"
         return "conflict"
-    if "doesn't match folder" in m or "mentions other project" in m:
+    if "doesn't match" in m or "mentions other project" in m:  # folder OR person filename mix-up
         return "cross-project"
     if "stale" in m or "review_by" in m or "last_done" in m:
         return "staleness"
@@ -182,14 +193,15 @@ def main():
         for i, line in enumerate(fh.read().splitlines(), 1):
             if "→" not in line:
                 continue
-            mp = re.search(r"(projects/\S+\.md)", line)
+            mp = re.search(r"((?:projects|people)/\S+\.md)", line)
             if not mp:
                 continue
             rel = mp.group(1).split("#")[0]
             linked.add(rel)
             full = os.path.join(brain, rel)
+            is_person = rel.startswith("people/")
             mb = re.search(r"\[([^\]]*)\]", line)
-            idx_st = index_status(mb.group(1)) if mb else None
+            idx_st = (people_status if is_person else index_status)(mb.group(1)) if mb else None
 
             if not os.path.isfile(full):
                 errors.append(f"index.md:{i} pointer to missing file → {rel}")
@@ -306,6 +318,49 @@ def main():
         if n > MAX_TOPICS:
             warnings.append(f"project '{proj}' has {n} topics (>{MAX_TOPICS}) — consider consolidating")
 
+    # 3. validate people/<slug>.md — agreements with humans, same validation spirit as topics
+    people_dir = os.path.join(brain, "people")
+    people_count = 0
+    if os.path.isdir(people_dir):
+        for name in sorted(os.listdir(people_dir)):
+            if not name.endswith(".md") or name.startswith("_"):
+                continue
+            rel = "people/" + name
+            full = os.path.join(people_dir, name)
+            people_count += 1
+            text = read_text(full)
+            fm = parse_frontmatter(text)
+            if fm is None:
+                errors.append(f"{rel}: missing/broken frontmatter (--- block)")
+                continue
+            missing = PEOPLE_REQUIRED - set(fm)
+            if missing:
+                errors.append(f"{rel}: frontmatter missing keys: {', '.join(sorted(missing))}")
+            st = fm.get("status")
+            if st and st not in PEOPLE_STATUS:
+                errors.append(f"{rel}: invalid status '{st}' (use: {', '.join(PEOPLE_STATUS)})")
+            trust = fm.get("trust")
+            if trust and trust not in VALID_TRUST:
+                warnings.append(f"{rel}: invalid trust '{trust}' (use: {' | '.join(VALID_TRUST)})")
+            slug = name[:-3]
+            if fm.get("person") and fm["person"] != slug:
+                warnings.append(f"{rel}: person '{fm['person']}' doesn't match filename '{slug}' — fix one")
+            review_by, last_done = fm.get("review_by"), fm.get("last_done")
+            if review_by:
+                d = parse_date(review_by)
+                if d is None:
+                    warnings.append(f"{rel}: review_by '{review_by}' is not a YYYY-MM-DD date")
+                elif today > d:
+                    warnings.append(f"{rel}: stale — review_by {review_by} has passed; re-confirm before trusting")
+            elif last_done:
+                d = parse_date(last_done)
+                if d is None:
+                    warnings.append(f"{rel}: last_done '{last_done}' is not a YYYY-MM-DD date")
+                elif (today - d).days > STALE_DAYS:
+                    warnings.append(f"{rel}: stale — last contact {last_done} (> {STALE_DAYS} days ago); re-confirm")
+            if rel not in linked:
+                warnings.append(f"{rel}: not linked from index.md # People (orphan)")
+
     # conflict detector: fold in each project's declared stack from index.md, then flag any
     # project that names two of the same mutually-exclusive category (relational DB / host)
     try:
@@ -372,12 +427,13 @@ def main():
         warnings.append(f"compact consistency check skipped ({exc})")
 
     total = sum(per_project.values())
+    ppl = f" + {people_count} person file(s)" if people_count else ""
 
     # report
     if report:
         print("Project Brain — report")
         print(f"  brain: {brain}")
-        print(f"  {total} topic file(s) across {len(per_project)} project folder(s)")
+        print(f"  {total} topic file(s) across {len(per_project)} project folder(s){ppl}")
         if errors:
             print(f"\n  Errors ({len(errors)}) — must fix:")
             for e in errors:
@@ -397,9 +453,9 @@ def main():
             print(f"✗ {e}")
 
     if errors:
-        print(f"\n✗ {len(errors)} error(s), {len(warnings)} warning(s) across {total} topic file(s).")
+        print(f"\n✗ {len(errors)} error(s), {len(warnings)} warning(s) across {total} topic file(s){ppl}.")
         return 1
-    print(f"\n✓ Brain OK — {total} topic file(s), {len(warnings)} warning(s).")
+    print(f"\n✓ Brain OK — {total} topic file(s){ppl}, {len(warnings)} warning(s).")
     return 0
 
 
