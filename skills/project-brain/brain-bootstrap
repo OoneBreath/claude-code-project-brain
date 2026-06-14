@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# brain-bootstrap — point Claude Code's *native* per-project memory at Project Brain,
+# without ever destroying memory a user already wrote.
+#
+# Native memory lives at ~/.claude/projects/<encoded-cwd>/memory/MEMORY.md. The
+# <encoded-cwd> mapping is internal to Claude Code and NOT safely reversible (a '-'
+# in the name may be a literal '-' or a path separator), so we DON'T compute it:
+# we glob the memory dirs Claude already created and seed a small, portable redirect
+# into each. The redirect is conditional ("if this workspace has a .project-brain/,
+# that's the source of truth"), so it carries no absolute path and stays correct on
+# any machine or OS.
+#
+# Non-destructive contract:
+#   - no MEMORY.md            -> create one containing just the redirect stub
+#   - already has our marker  -> do nothing (idempotent)
+#   - has other content       -> back it up (.bak-<ts>) and PREPEND the redirect,
+#                                never deleting or reordering the user's own text
+#
+# Safe to run repeatedly. Scan root resolves as: arg $1, else $PROJECTS_DIR, else
+# ~/.claude/projects. (arg/env override is what lets the tests prove portability on
+# a simulated foreign path like -Users-test, not just the author's -home-ubuntu.)
+set -u
+
+PROJECTS_DIR="${1:-${PROJECTS_DIR:-$HOME/.claude/projects}}"
+MARKER="<!-- project-brain-redirect v1 -->"
+
+stub() {  # redirect block; marker first so idempotency is a plain grep
+  cat <<EOF
+$MARKER
+# Native memory — deferred to Project Brain
+
+If this workspace contains a \`.project-brain/\` directory, that brain is the single
+source of truth. At session start read \`.project-brain/index.compact\`; do not copy
+project facts into this file. (Seeded by project-brain bootstrap; edit below freely.)
+EOF
+}
+
+[ -d "$PROJECTS_DIR" ] || { echo "brain-bootstrap: no projects dir at $PROJECTS_DIR — nothing to do."; exit 0; }
+
+seeded=0; preserved=0; unchanged=0
+for memdir in "$PROJECTS_DIR"/*/memory; do
+  [ -d "$memdir" ] || continue            # no glob match -> literal path, skip
+  f="$memdir/MEMORY.md"
+  if [ ! -f "$f" ]; then
+    stub > "$f"
+    echo "  + seeded redirect: $f"
+    seeded=$((seeded + 1))
+  elif grep -qF "$MARKER" "$f"; then
+    echo "  = already redirected (unchanged): $f"
+    unchanged=$((unchanged + 1))
+  else
+    ts="$(date +%Y%m%d-%H%M%S)"
+    cp "$f" "$f.bak-$ts"
+    { stub; echo; cat "$f.bak-$ts"; } > "$f"
+    echo "  ! existing notes PRESERVED (backup: $f.bak-$ts); redirect prepended: $f"
+    preserved=$((preserved + 1))
+  fi
+done
+echo "brain-bootstrap: seeded=$seeded preserved=$preserved unchanged=$unchanged  (root: $PROJECTS_DIR)"
