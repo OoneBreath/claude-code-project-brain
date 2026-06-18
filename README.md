@@ -6,7 +6,7 @@
 
 ![Project Brain in action — the agent reads the project map, recalls how the cache fix was done, and refuses to silently redo verified work](docs/demo.gif)
 
-<sub>Core recall flow shown above (read the map → recall with version history → refuse to redo verified work). See **[What's new in 2.0](#whats-new-in-20)** for the compact index, tiers, session resume, decisions, people, and infra-safe export.</sub>
+<sub>Core recall flow shown above (read the map → recall with version history → refuse to redo verified work). See **[What's new in 2.1](#whats-new-in-21)** for the latest, and **[What's new in 2.0](#whats-new-in-20)** for the compact index, tiers, session resume, decisions, people, and infra-safe export.</sub>
 
 Project Brain gives your AI agent a small, navigable **map** of your projects — their stack, decisions,
 pitfalls, what's done, what failed, and where you left off — so it stops forgetting, stops mixing
@@ -90,6 +90,27 @@ truth that survives months and travels across tools, that's this.
 
 ---
 
+## What's new in 2.1
+
+Quality-of-life release that finishes wiring the brain into Claude Code's own machinery —
+backward compatible, still zero runtime dependencies for the brain itself.
+
+- **`install.sh` auto-wires the `brain-nudge` Stop hook for skill installs.** Previously only the
+  plugin path registered the save-reminder hook; a skill-only install shipped it but never ran it.
+  The installer now **merges** the hook into `~/.claude/settings.json` — it preserves your existing
+  keys, is idempotent, and **backs up + prints a diff** before writing (uses `node`, which Claude Code
+  already ships, so no `jq` needed).
+- **`brain-bootstrap`** — an on-demand tool that points Claude Code's native per-project memory at the
+  brain, **non-destructively**: writes a small *conditional* redirect ("if this workspace has a
+  `.project-brain/`, it's the source of truth"), backs up and preserves any existing notes, and is
+  idempotent. Cuts the always-loaded native-memory tokens without losing anything.
+- **`init`-time native→brain seeding** — `/project-brain init` now offers to seed that same redirect for
+  the current workspace, so one memory system stops competing with (and drifting from) the brain.
+
+Full details in the [CHANGELOG](CHANGELOG.md).
+
+---
+
 ## What's new in 2.0
 
 - **Dual-format index** — a generated, token-cheap `index.compact` the agent reads first (≈ −52% vs
@@ -130,6 +151,10 @@ cd claude-code-project-brain
 ```
 
 **Start a new Claude Code session after installing** — skills load at session start.
+
+> `install.sh` also wires the optional `brain-nudge` save-reminder hook by **merging** it into
+> `~/.claude/settings.json` — it keeps your existing settings, is idempotent, and backs up + prints a
+> diff before writing (a corrupt or foreign settings.json is left untouched).
 
 Then, in a session inside your workspace:
 
