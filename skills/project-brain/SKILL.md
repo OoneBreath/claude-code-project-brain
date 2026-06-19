@@ -1,6 +1,6 @@
 ---
 name: project-brain
-version: 2.1.0
+version: 2.1.1
 author: Slawomir Luzny <info@fixflex.co.uk> (https://fixflex.co.uk)
 description: >-
   Persistent, navigable project memory for Claude Code that survives across
@@ -147,6 +147,9 @@ an invalid `trust:`, a topic past its staleness horizon, a `project:` that doesn
 folder, an `index.compact` that is missing or out of date with `index.md`, and **conflicting facts**
 — a single project that names two of the same mutually-exclusive tech (a relational DB, or a host)
 across its index stack and topic files, which is usually a stale fact one place forgot to update.
+An **aggregator** topic that legitimately lists several (an infra topology map, a multi-repo
+roadmap) opts a group out with frontmatter `allow_conflict: [relational-db]` — narrow: it excludes
+only that topic's tokens, so genuine drift in other topics still surfaces.
 Add `--report` for a grouped, readable rundown (conflicts, staleness, orphans, …) instead of a flat
 list — same checks, easier to scan. Add `--diff YYYY-MM-DD` to instead list **what changed since a
 date** — new/updated topics, session lines, resume lines, decisions, and people — read straight from
@@ -417,6 +420,7 @@ status: verified          # verified | done | in-progress | failed | superseded 
 trust: human              # human=FACT | ai-inferred | pref=preference  (absent = ai-inferred)
 last_done: 2026-05-12
 review_by: 2026-11-12      # optional: re-confirm by this date, else flagged stale
+# allow_conflict: [relational-db]   # optional: aggregator topic may list several DBs/hosts — don't flag
 version: 2
 ---
 

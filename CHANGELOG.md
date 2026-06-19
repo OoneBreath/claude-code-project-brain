@@ -3,6 +3,23 @@
 All notable changes to Project Brain are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); the project uses semantic-ish versioning.
 
+## [2.1.1] — 2026-06-19
+
+Patch: a narrow opt-out for the conflict detector. **Backward compatible** — brains without the new
+field behave exactly as before.
+
+### Added
+- **`allow_conflict:` frontmatter on a topic.** The conflict detector flags a project that names two
+  of the same mutually-exclusive tech (a relational DB, a host) — but an **aggregator** topic (an
+  infra topology map, a multi-repo roadmap/checklist) legitimately lists several at once. Such a topic
+  can now opt a group out with `allow_conflict: [relational-db]` (or `true` for all groups). It is
+  **narrow**: only that topic's tokens are excluded from the tally, so genuine drift in *other* topics
+  still surfaces. An inline `# comment` after the value is tolerated; an unknown group name is warned.
+
+### Fixed
+- Aggregator topics no longer raise a permanent false-positive conflict warning that no note could
+  silence (e.g. an infra `server-topology` that maps each project's DB across MariaDB/Postgres/SQLite).
+
 ## [2.1.0] — 2026-06-14
 
 Quality-of-life release that finishes wiring the brain into Claude Code's own machinery. **Backward

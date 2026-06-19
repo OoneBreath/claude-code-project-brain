@@ -16,7 +16,9 @@ Checks:
   - warns on thin topics (< 300 B), over-long topics (> 40 body lines), over-fragmented
     projects (> 15 topics), and session-log overflow (> 5 active lines)
   - conflict detector: a single project that names two of the same mutually-exclusive tech
-    (a relational DB, or a host) across its index stack and topic files — likely a stale fact
+    (a relational DB, or a host) across its index stack and topic files — likely a stale fact.
+    An aggregator topic (infra map, multi-repo roadmap) can opt a group out with frontmatter
+    `allow_conflict: [relational-db]` so its legitimate multi-tech listing isn't flagged
   - people/<slug>.md: valid frontmatter (person/status/version), a relationship status
     (active|prospect|paused|closed), person matches the filename, staleness, and orphans
 
@@ -130,6 +132,26 @@ def find_tech(text):
             if re.search(r"(?<![a-z0-9])" + re.escape(tok) + r"(?![a-z0-9])", low):
                 found.setdefault(group, set()).add(TECH_CANON.get(tok, tok))
     return found
+
+
+def parse_allow_conflict(val):
+    """Frontmatter `allow_conflict:` -> set of tech groups this topic may legitimately name
+    several of (a `{"*"}` sentinel means every group).
+
+    For an *aggregator* topic — an infra topology map, a multi-repo roadmap/checklist — naming
+    `mysql`, `postgres` and `sqlite` together is correct, not the stale-fact rot the conflict
+    detector hunts. This is the human's narrow opt-out: tokens from a topic that allows a group
+    are not tallied toward that group's per-project conflict. It does NOT silence conflicts that
+    arise from *other* topics, so genuine drift elsewhere still surfaces.
+
+    Accepts `true` / `all` (every group), or a list `[relational-db, host]` / comma string.
+    """
+    if not val:
+        return set()
+    v = re.split(r"\s+#", val, 1)[0].strip()  # drop a YAML-style inline ` # comment`
+    if v.lower() in ("true", "all", "*", "yes"):
+        return {"*"}
+    return {t.strip().strip("'\"") for t in v.strip("[]").split(",") if t.strip()}
 
 
 # --- --report grouping: classify a warning string into a section (default output is unchanged) ---
@@ -410,7 +432,18 @@ def main():
                     warnings.append(f"{rel}: not linked from index.md (orphan)")
 
                 # --- conflict detector: gather exclusive tech tokens this topic names ---
+                # An aggregator topic can opt out via `allow_conflict:` so its legitimate
+                # multi-tech listing is not tallied (narrow: other topics still conflict).
+                allowed = parse_allow_conflict(fm.get("allow_conflict"))
+                unknown = {g for g in allowed if g != "*"} - set(TECH_GROUPS)
+                if unknown:
+                    warnings.append(
+                        f"{rel}: allow_conflict names unknown group(s) {', '.join(sorted(unknown))} "
+                        f"— valid: {', '.join(sorted(TECH_GROUPS))}"
+                    )
                 for group, toks in find_tech(text).items():
+                    if "*" in allowed or group in allowed:
+                        continue  # human vouched this topic legitimately names several
                     for canon in toks:
                         (tech_sources.setdefault(folder, {})
                                      .setdefault(group, {})
