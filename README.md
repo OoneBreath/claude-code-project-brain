@@ -61,9 +61,9 @@ Be honest with yourself about why you'd use this:
 
 - **Fewer tokens — when it applies.** If you currently keep everything in a giant always-loaded doc,
   splitting into a small index + on-demand topic files genuinely cuts per-session context; the compact
-  and tiers cut it further on big brains. (Measured on a real 6-project / 15-topic brain: the compact
-  index came out **~52% smaller** than the full index — and the saving scales with how much prose your
-  summaries carry, so a tiny brain sees less.)
+  and tiers cut it further on big brains. (Measured on a real 6-project / 15-topic brain:
+  `index.md` 3415 B → `index.compact` 1655 B — **~52% smaller** — and the saving scales with how much
+  prose your summaries carry, so a tiny brain sees less.)
 - **Fewer hallucinations.** The map is an anchor. The model stops inventing your deployment or swapping
   one project's stack for another's — and the conflict detector catches it when a fact drifts.
 - **Multi-month memory.** Come back after three months and the agent still knows how it works — without
@@ -158,7 +158,7 @@ date — read straight from the brain's own dates, no git required.
 
 ## What's new in 2.1
 
-Quality-of-life line that finishes wiring the brain into Claude Code's own machinery —
+Quality-of-life release that finishes wiring the brain into Claude Code's own machinery —
 backward compatible, still zero runtime dependencies for the brain itself.
 
 - **`install.sh` auto-wires the `brain-nudge` Stop hook for skill installs.** Previously only the plugin
