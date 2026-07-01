@@ -48,7 +48,7 @@ def main():
     with open(out_path, "w", encoding="utf-8") as fh:
         fh.write(compact)
 
-    n_proj = sum(1 for ln in compact.splitlines() if ln.startswith("P "))
+    n_proj = sum(1 for ln in compact.splitlines() if ln.startswith(("P ", "P+ ")))
     print(f"✓ wrote {out_path} ({os.path.getsize(out_path)} B, {n_proj} project(s))")
     return 0
 

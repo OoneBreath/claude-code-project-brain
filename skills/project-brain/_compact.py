@@ -204,8 +204,15 @@ def _resume_date(raw):
 
 
 def _recency(project):
-    """A project's most recent activity = the latest topic date (YYYY-MM-DD sorts lexically)."""
+    """A project's most recent activity = the latest topic OR resume date (ISO sorts lexically).
+
+    The resume line counts too: a project actively being worked on (fresh `> resume`, topic
+    not re-dated yet) must not lose its HOT slot to one with a stale-but-later topic date.
+    """
     dates = [t["date"] for t in project["topics"] if t["date"]]
+    rd = _resume_date(project["resume"])
+    if rd:
+        dates.append(rd)
     return max(dates) if dates else ""
 
 
@@ -347,12 +354,14 @@ def render_compact(text, gen_date=None):
 
 
 def data_lines(compact_text):
-    """The meaningful lines of a compact file: comments (#) and metadata (@) stripped.
+    """The meaningful lines of a compact file: comments (#) and the volatile meta line stripped.
 
     Used to compare two compact renderings for *content* equality while ignoring the
     legend and the volatile @gen timestamp — so the consistency check is deterministic.
+    Only the "@src …" meta line is metadata; "@people" / "@ <slug> …" lines are DATA —
+    stripping every "@" line made people changes invisible to the drift check (fixed in 2.1.2).
     """
     return [
         ln for ln in compact_text.splitlines()
-        if ln and not ln.startswith("#") and not ln.startswith("@")
+        if ln and not ln.startswith("#") and not ln.startswith("@src")
     ]

@@ -40,11 +40,19 @@ REDACTIONS = [
     (re.compile(r'(?i)([\w-]*(?:password|passwd|secret|api[_-]?key|access[_-]?key|token|bearer|'
                 r'authoriz\w*)[\w-]*\s*[:=]\s*)"?\S+'), r'\1[redacted]'),
     (re.compile(r'\bAKIA[0-9A-Z]{12,}\b'), '[redacted-key]'),
+    # emails / ssh targets before [host], or the domain half gets rewritten first
+    (re.compile(r'\b[\w.+-]+@[\w-]+(?:\.[\w-]+)+\b'), '[user@host]'),
     (re.compile(r'\b\d{1,3}(?:\.\d{1,3}){3}\b'), '[ip]'),
+    # IPv6: full form, and :: compression with at least one hex group (over-redaction
+    # beats a leak in a redactor, so the compressed form is deliberately permissive)
+    (re.compile(r'(?i)\b(?:[0-9a-f]{1,4}:){7}[0-9a-f]{1,4}\b'), '[ip6]'),
+    (re.compile(r'(?i)(?<![\w:.])(?:[0-9a-f]{1,4}:){1,7}:(?:[0-9a-f]{1,4}(?::[0-9a-f]{1,4}){0,6})?(?![\w:])'), '[ip6]'),
     (re.compile(r'/(?:home|root|opt|var|etc|usr|srv|mnt|tmp)/[^\s)\'"`]*'), '[path]'),
     (re.compile(r'\b[A-Za-z]:\\[^\s)\'"`]*'), '[path]'),
     (re.compile(r'\b(?:[a-z0-9-]+\.)+(?:com|net|org|io|info|dev|app|co|uk|cloud|ai|sh|me|xyz|'
-                r'eu|de|tech|host)\b', re.I), '[host]'),
+                r'eu|de|tech|host|pl|cz|sk|fr|es|it|nl|be|at|ch|se|no|fi|dk|pt|ie|us|ca|au|nz|'
+                r'jp|br|in|ru|ua|online|site|store|space|live|world|today|agency|network|'
+                r'systems|solutions|digital)\b', re.I), '[host]'),
     (re.compile(r'(?<=[\w\]]):\d{2,5}\b'), ':[port]'),
     (re.compile(r'\b[A-Fa-f0-9]{32,}\b'), '[redacted-hash]'),
     (re.compile(r'\b[A-Za-z0-9+/]{28,}={0,2}\b'), '[redacted-token]'),

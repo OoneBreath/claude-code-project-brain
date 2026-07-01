@@ -57,6 +57,21 @@ MAX_TOPICS = 15
 MAX_BODY_LINES = 40                       # a topic longer than this wants splitting (memory hygiene)
 
 
+def skill_version():
+    """Version of THIS installed copy, from the SKILL.md sitting next to the script.
+
+    Printed in the summary so a stale install (repo updated, install.sh not re-run)
+    is visible instead of silently mis-validating — that drift produced real false
+    positives once (allow_conflict existed in the repo but not in the installed copy).
+    """
+    try:
+        text = read_text(os.path.join(os.path.dirname(os.path.abspath(__file__)), "SKILL.md"))
+        m = re.search(r"^version:\s*(\S+)", text, re.M)
+        return m.group(1) if m else None
+    except Exception:
+        return None
+
+
 def find_brain(arg):
     cand = arg or "."
     if os.path.basename(os.path.normpath(cand)) == ".project-brain" and os.path.isdir(cand):
@@ -96,15 +111,16 @@ def parse_date(s):
 
 
 def index_status(bracket):
-    for s in VALID_STATUS:  # ordered: "in-progress" before substrings can't collide
-        if s in bracket:
+    for s in VALID_STATUS:
+        if re.search(r"\b" + re.escape(s) + r"\b", bracket):
             return s
     return None
 
 
 def people_status(bracket):
+    # word-boundary match: a plain substring test made "[inactive …]" read as "active"
     for s in PEOPLE_STATUS:
-        if s in bracket:
+        if re.search(r"\b" + re.escape(s) + r"\b", bracket):
             return s
     return None
 
@@ -206,7 +222,13 @@ def run_diff(brain, cutoff):
     pdir = os.path.join(brain, "projects")
     if os.path.isdir(pdir):
         for root, _dirs, files in os.walk(pdir):
-            proj = os.path.basename(root)
+            # label by the project folder, not the innermost dir — a topic parked in
+            # projects/<p>/_archive/ belongs to <p>, and archived material stays out
+            # of a "what changed" view (it was archived precisely to leave the map)
+            rel_dir = os.path.relpath(root, pdir)
+            if any(part.startswith("_") for part in rel_dir.split(os.sep) if part != "."):
+                continue
+            proj = rel_dir.split(os.sep)[0] if rel_dir != "." else ""
             for name in sorted(files):
                 if not name.endswith(".md"):
                     continue
@@ -587,10 +609,12 @@ def main():
         for e in errors:
             print(f"✗ {e}")
 
+    ver = skill_version()
+    tag = f"  [brain-check {ver}]" if ver else ""
     if errors:
-        print(f"\n✗ {len(errors)} error(s), {len(warnings)} warning(s) across {total} topic file(s){ppl}.")
+        print(f"\n✗ {len(errors)} error(s), {len(warnings)} warning(s) across {total} topic file(s){ppl}.{tag}")
         return 1
-    print(f"\n✓ Brain OK — {total} topic file(s){ppl}, {len(warnings)} warning(s).")
+    print(f"\n✓ Brain OK — {total} topic file(s){ppl}, {len(warnings)} warning(s).{tag}")
     return 0
 
 

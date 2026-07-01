@@ -24,9 +24,16 @@ index="$brain/index.md"
 [ -f "$index" ] || exit 0
 
 # Did real work happen that the brain doesn't reflect yet?
+# "Doesn't reflect" = the change is NEWER than index.md. A merely-dirty git tree is
+# not enough: right after a save the tree is usually still dirty (code uncommitted),
+# and nudging then — about work that was just saved — is exactly the noise to avoid.
 changed=0
 if git -C "$ws" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  [ -n "$(git -C "$ws" status --porcelain 2>/dev/null)" ] && changed=1
+  while IFS= read -r f; do
+    f="${f#\"}"; f="${f%\"}"                 # porcelain quotes special paths
+    [ -e "$ws/$f" ] || continue
+    if [ "$ws/$f" -nt "$index" ]; then changed=1; break; fi
+  done < <(git -C "$ws" status --porcelain 2>/dev/null | sed 's/^...//; s/.* -> //')
 else
   # non-git: any file newer than index.md (ignore the brain's own files + noise)
   hit="$(find "$ws" -type f -newer "$index" \

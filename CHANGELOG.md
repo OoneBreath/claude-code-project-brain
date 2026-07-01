@@ -3,6 +3,37 @@
 All notable changes to Project Brain are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); the project uses semantic-ish versioning.
 
+## [2.1.2] — 2026-07-01
+
+Patch: small correctness fixes found by auditing the tool against its own author's
+production brain. **Backward compatible** — no format changes, no new required fields.
+
+### Fixed
+- **People changes now count as compact drift.** `data_lines()` stripped every `@` line as
+  metadata, but `@people` / `@ <slug> …` lines are data — editing the `# People` section never
+  triggered the "index.compact is out of date" warning. Only the `@src …` meta line is stripped
+  now. Regression test added (`tests/test-compact-people-drift.sh`).
+- **`brain-nudge` no longer nudges right after a save.** A merely-dirty git tree was treated as
+  unsaved work, so the very next Stop after updating `index.md` (code still uncommitted — the
+  normal case) nudged again. It now nudges only when a change is *newer* than `index.md`.
+- **HOT tiering counts the resume line.** Project recency was the latest topic date only, so a
+  project actively being worked on (fresh `> resume`, topic not re-dated yet) could lose its
+  HOT slot. Recency is now max(topic dates, resume date).
+- **`[inactive …]` no longer parses as `active`** — people/index status matching uses word
+  boundaries instead of substring containment.
+- **`--diff` no longer mislabels archived topics** as belonging to a project called `_archive`;
+  archived material is excluded from the changed-since view entirely.
+- **`brain-compact` counted only WARM projects** in its summary line (`P ` missed `P+`).
+
+### Added
+- **`brain-check` prints its own version** (from the SKILL.md next to it) in the summary line —
+  a stale install (repo updated, `install.sh` not re-run) is now visible instead of silently
+  mis-validating. That exact drift produced false `conflicting relational-db` warnings on a
+  real brain: the repo had `allow_conflict:`, the installed copy didn't.
+- **Wider export redaction:** emails / ssh targets (`user@host`), IPv6 addresses, and a much
+  broader TLD list (`.pl`, `.cz`, `.fr`, `.it`, `.online`, `.site`, … — the author's own `.pl`
+  was previously not redacted).
+
 ## [2.1.1] — 2026-06-19
 
 Patch: a narrow opt-out for the conflict detector. **Backward compatible** — brains without the new
