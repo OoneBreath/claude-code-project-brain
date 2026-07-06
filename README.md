@@ -20,6 +20,10 @@ Works across tools — **Claude Code · Cursor · Windsurf**, or any file-readin
 
 <sub>Core recall flow above: read the map → recall with version history → refuse to silently redo verified work.</sub>
 
+![The interview — a fresh agent session greets with full project context from the brain, then gives an unscripted, self-critical review of Project Brain itself](docs/interview.gif)
+
+<sub>"The interview": a brand-new session types <code>hi</code> and is instantly oriented across every project from the brain — then answers, unscripted, whether the tool is actually any good (criticism included).</sub>
+
 ---
 
 ## The problem
