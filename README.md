@@ -2,7 +2,7 @@
 
 **Stop re-explaining your projects to the AI every session.**
 
-[![Version](https://img.shields.io/badge/version-2.1.1-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.1.2-blue)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Runtime deps](https://img.shields.io/badge/runtime%20deps-zero-success)](#how-it-works)
 [![Works with](https://img.shields.io/badge/works%20with-Claude%20Code%20%C2%B7%20Cursor%20%C2%B7%20Windsurf-purple)](#works-across-tools-same-brain-different-agents)
