@@ -292,9 +292,11 @@ turns the brain into a single pasteable file for assistants with no filesystem a
 Gemini / ChatGPT).
 
 > **The honest limit — the model matters more than the tool.** This works when the agent is driven by a
-> capable model with real tool use. A small local 7B model failed: it couldn't run the read → use →
-> write loop and started inventing the brain's contents. Reading a brain is nearly universal; managing
-> one well needs a model that can actually do agentic tool use.
+> model with real agentic tool use. A small local 7B model failed: it couldn't run the read → use →
+> write loop and started inventing the brain's contents. A **free local Gemma model (via Ollama)** later
+> ran the full loop correctly — slower, but it read the brain, did the work, and respected the update
+> hook. Capability is the bar, not the vendor: reading a brain is nearly universal, and managing one
+> well is now within reach of good local models.
 
 ---
 
