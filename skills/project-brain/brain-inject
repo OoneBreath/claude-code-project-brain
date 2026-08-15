@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# brain-inject — Project Brain auto-loader (Claude Code "SessionStart" hook).
+#
+# Injects .project-brain/index.compact straight into the session's context at
+# startup, so the compact brain index is always loaded without depending on
+# the model choosing to read it (it was skipping this some sessions).
+#
+# No third-party deps. Safe no-op if there is no brain in this project.
+set -u
+
+ws="${CLAUDE_PROJECT_DIR:-$PWD}"
+index="$ws/.project-brain/index.compact"
+
+[ -f "$index" ] || exit 0
+
+content="$(cat "$index" 2>/dev/null)"
+[ -n "$content" ] || exit 0
+
+# jq is optional, not required (this skill stays zero-dependency) — used only
+# when present, for robust JSON-string escaping. Manual fallback below covers
+# the no-jq case with the same escaping jq would do for this content shape.
+if command -v jq >/dev/null 2>&1; then
+  jq -n --arg c "$content" \
+    '{hookSpecificOutput: {hookEventName: "SessionStart", additionalContext: ("Project Brain index (.project-brain/index.compact), auto-loaded:\n\n" + $c)}}'
+  exit 0
+fi
+
+# jq unavailable — fall back to a minimal manual JSON string escape.
+escaped="$content"
+escaped="${escaped//\\/\\\\}"
+escaped="${escaped//\"/\\\"}"
+escaped="${escaped//$'\n'/\\n}"
+printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"Project Brain index (.project-brain/index.compact), auto-loaded:\\n\\n%s"}}\n' "$escaped"
+exit 0

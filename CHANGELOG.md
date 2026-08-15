@@ -3,6 +3,24 @@
 All notable changes to Project Brain are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); the project uses semantic-ish versioning.
 
+## [2.2.0] — 2026-08-15
+
+New hook that makes the brain load mechanically instead of relying on the agent choosing to
+read it. **Backward compatible**, still zero required runtime dependencies.
+
+### Added
+- **`brain-inject` — auto-loads `index.compact` on every session start.** A new bundled
+  `SessionStart` hook reads `.project-brain/index.compact` for the current workspace and returns
+  it via `hookSpecificOutput.additionalContext`, so the compact index lands in context before the
+  agent does anything — it no longer depends on the model deciding to read it. Motivated by a
+  confirmed case of a small/fresh model skipping the read on a no-task greeting. No brain in the
+  project → silent no-op. Uses `jq` opportunistically for JSON-string escaping when present, with
+  a dependency-free manual-escape fallback — same zero-hard-dependency stance as the rest of the
+  skill.
+- **Plugin installs get it automatically** (`hooks/hooks.json`); **skill installs** get it via
+  `install.sh`, which now registers `Stop` and `SessionStart` hooks through one shared,
+  idempotent `register_hook()` merge routine (previously `Stop`-only).
+
 ## [2.1.2] — 2026-07-01
 
 Patch: small correctness fixes found by auditing the tool against its own author's

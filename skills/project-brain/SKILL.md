@@ -1,6 +1,6 @@
 ---
 name: project-brain
-version: 2.1.2
+version: 2.2.0
 author: Slawomir Luzny <info@fixflex.co.uk> (https://fixflex.co.uk)
 description: >-
   Persistent, navigable project memory for Claude Code that survives across
@@ -451,22 +451,35 @@ version: 2
   save and let the user decide. (The bundled `brain-nudge` Stop hook only reminds — it cannot write.)
 - **Keep CLAUDE.md pointer tiny.** It points to the map; it is not a copy of the map.
 
-## Optional: the save reminder (brain-nudge hook)
+## Optional: the bundled hooks (brain-inject, brain-nudge)
 
-A bundled `Stop` hook (`brain-nudge`) reminds you to keep the brain current. It fires at the **end of
-a turn** (not at session end) and is **throttled**, so when a turn changed files but `index.md` wasn't
+Two small hooks make the brain load and stay current mechanically, instead of depending on the
+agent choosing to do either.
+
+**`brain-inject`** (`SessionStart`) reads `.project-brain/index.compact` for the current workspace
+and returns it as context at the **start of the session**, before the agent does anything — so the
+compact index is always loaded, even by a model that would otherwise skip reading it on a plain
+greeting. No brain in the project → silent no-op.
+
+**`brain-nudge`** (`Stop`) reminds you to keep the brain current. It fires at the **end of a turn**
+(not at session end) and is **throttled**, so when a turn changed files but `index.md` wasn't
 updated, it surfaces the note *once after the work* — *"you did work — want to save any of it?"* — not
 on every turn. It **never writes to the brain and never blocks** — auto-saving everything would turn
 the map into a swamp. It only nudges; the human still decides what is worth keeping.
 
-- Installed as a **plugin**, the hook is wired up automatically (`hooks/hooks.json`).
-- Installed as a **skill**, `install.sh` wires it for you — it **merges** the hook into
+- Installed as a **plugin**, both hooks are wired up automatically (`hooks/hooks.json`).
+- Installed as a **skill**, `install.sh` wires them for you — it **merges** each hook into
   `~/.claude/settings.json` (keeping your existing settings, idempotent, with a backup). If you ever
-  need to add it by hand:
+  need to add them by hand:
   ```json
-  { "hooks": { "Stop": [ { "hooks": [
-    { "type": "command", "command": "~/.claude/skills/project-brain/brain-nudge" }
-  ] } ] } }
+  { "hooks": {
+    "SessionStart": [ { "hooks": [
+      { "type": "command", "command": "~/.claude/skills/project-brain/brain-inject" }
+    ] } ],
+    "Stop": [ { "hooks": [
+      { "type": "command", "command": "~/.claude/skills/project-brain/brain-nudge" }
+    ] } ]
+  } }
   ```
 
 ## Keeping the brain lean — archiving

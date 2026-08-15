@@ -10,7 +10,6 @@ set -euo pipefail
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/skills/project-brain"
 DEST="${HOME}/.claude/skills/project-brain"
 SETTINGS="${HOME}/.claude/settings.json"
-HOOK_CMD="${DEST}/brain-nudge"
 
 if [ ! -f "${SRC}/SKILL.md" ]; then
   echo "error: ${SRC}/SKILL.md not found — run this from inside the repo." >&2
@@ -21,23 +20,28 @@ mkdir -p "${DEST}"
 cp -R "${SRC}/." "${DEST}/"
 echo "✓ Installed project-brain skill to ${DEST}"
 
-# Register the brain-nudge Stop hook in settings.json.
-# Skill-mode installs (unlike the plugin) don't get the hook wired automatically,
-# so we MERGE it in: never overwrite existing settings (permissions, model, ...),
+# Register the bundled hooks in settings.json.
+# Skill-mode installs (unlike the plugin) don't get hooks wired automatically,
+# so we MERGE each one in: never overwrite existing settings (permissions, model, ...),
 # idempotent (skip if already present), back up + show a diff before writing.
 # Uses node (a hard dependency of Claude Code) so there's no jq requirement.
-register_stop_hook() {
+#
+# $1 = hook event name (e.g. "Stop", "SessionStart")
+# $2 = marker substring used to detect "already registered" (the script's basename)
+# $3 = full command to run
+register_hook() {
+  local event="$1" marker="$2" cmd="$3"
   if ! command -v node >/dev/null 2>&1; then
-    echo "  ! node not found — skipping Stop-hook registration."
-    echo "    Add it by hand: a Stop hook running ${HOOK_CMD}"
+    echo "  ! node not found — skipping ${event}-hook registration."
+    echo "    Add it by hand: a ${event} hook running ${cmd}"
     return 0
   fi
   mkdir -p "$(dirname "$SETTINGS")"
   local tmp; tmp="$(mktemp)"
   local rc=0
-  node - "$SETTINGS" "$HOOK_CMD" "$tmp" <<'NODE' || rc=$?
+  node - "$SETTINGS" "$event" "$marker" "$cmd" "$tmp" <<'NODE' || rc=$?
 const fs = require('fs');
-const [, , settingsPath, hookCmd, outPath] = process.argv;
+const [, , settingsPath, event, marker, hookCmd, outPath] = process.argv;
 let cfg = {};
 try {
   const raw = fs.existsSync(settingsPath) ? fs.readFileSync(settingsPath, 'utf8').trim() : '';
@@ -46,21 +50,21 @@ try {
   process.exit(3); // existing settings.json is not valid JSON -> do not touch it
 }
 cfg.hooks = cfg.hooks || {};
-let stop = Array.isArray(cfg.hooks.Stop) ? cfg.hooks.Stop
-         : (cfg.hooks.Stop ? [cfg.hooks.Stop] : []);
-if (JSON.stringify(stop).includes('brain-nudge')) process.exit(10); // already registered
-stop.push({ hooks: [{ type: 'command', command: hookCmd }] });
-cfg.hooks.Stop = stop;
+let list = Array.isArray(cfg.hooks[event]) ? cfg.hooks[event]
+         : (cfg.hooks[event] ? [cfg.hooks[event]] : []);
+if (JSON.stringify(list).includes(marker)) process.exit(10); // already registered
+list.push({ hooks: [{ type: 'command', command: hookCmd }] });
+cfg.hooks[event] = list;
 fs.writeFileSync(outPath, JSON.stringify(cfg, null, 2) + '\n');
 process.exit(0);
 NODE
   case "$rc" in
-    10) echo "  ✓ Stop hook already registered — settings.json unchanged"; rm -f "$tmp"; return 0 ;;
+    10) echo "  ✓ ${event} hook already registered — settings.json unchanged"; rm -f "$tmp"; return 0 ;;
     3)  echo "  ! settings.json is not valid JSON — left untouched, hook not added"; rm -f "$tmp"; return 0 ;;
     0)  : ;;
     *)  echo "  ! hook registration failed (node rc=$rc) — settings.json left untouched"; rm -f "$tmp"; return 0 ;;
   esac
-  echo "  + registering Project Brain Stop hook (brain-nudge):"
+  echo "  + registering Project Brain ${event} hook (${marker}):"
   echo "  --- settings.json diff ---"
   if [ -f "$SETTINGS" ]; then
     diff -u "$SETTINGS" "$tmp" | sed 's/^/    /' || true
@@ -72,6 +76,7 @@ NODE
   mv "$tmp" "$SETTINGS"
   echo "  ✓ settings.json updated (previous version backed up)"
 }
-register_stop_hook
+register_hook "Stop" "brain-nudge" "${DEST}/brain-nudge"
+register_hook "SessionStart" "brain-inject" "${DEST}/brain-inject"
 
 echo "  Start a Claude Code session and run:  /project-brain  (then 'init')"

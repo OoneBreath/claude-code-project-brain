@@ -2,7 +2,7 @@
 
 **Stop re-explaining your projects to the AI every session.**
 
-[![Version](https://img.shields.io/badge/version-2.1.2-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.2.0-blue)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Runtime deps](https://img.shields.io/badge/runtime%20deps-zero-success)](#how-it-works)
 [![Works with](https://img.shields.io/badge/works%20with-Claude%20Code%20%C2%B7%20Cursor%20%C2%B7%20Windsurf-purple)](#works-across-tools-same-brain-different-agents)
@@ -160,6 +160,22 @@ date — read straight from the brain's own dates, no git required.
 
 ---
 
+## What's new in 2.2
+
+New hook that makes the brain load mechanically instead of relying on the agent choosing to read
+it — backward compatible, still zero required runtime dependencies.
+
+- **`brain-inject` auto-loads `index.compact` on every session start.** A new `SessionStart` hook
+  reads `.project-brain/index.compact` for the current workspace and injects it as context before
+  the agent does anything, so it no longer depends on the model deciding to read it — motivated by
+  a confirmed case of a small/fresh model skipping the read on a plain no-task greeting. Wired
+  automatically for plugin installs (`hooks/hooks.json`); `install.sh` registers it for skill
+  installs, alongside `brain-nudge`, through one shared idempotent merge routine.
+
+Full details in the [CHANGELOG](CHANGELOG.md).
+
+---
+
 ## What's new in 2.1
 
 Quality-of-life release that finishes wiring the brain into Claude Code's own machinery —
@@ -211,9 +227,10 @@ cd claude-code-project-brain
 
 **Start a new Claude Code session after installing** — skills load at session start.
 
-> `install.sh` also wires the optional `brain-nudge` save-reminder hook by **merging** it into
-> `~/.claude/settings.json` — it keeps your existing settings, is idempotent, and backs up + prints a
-> diff before writing (a corrupt or foreign settings.json is left untouched).
+> `install.sh` also wires the optional `brain-inject` (auto-load) and `brain-nudge` (save-reminder)
+> hooks by **merging** them into `~/.claude/settings.json` — it keeps your existing settings, is
+> idempotent, and backs up + prints a diff before writing (a corrupt or foreign settings.json is left
+> untouched).
 
 Then, in a session inside your workspace:
 
@@ -248,7 +265,10 @@ workspace root and it catalogs them all in one brain.
   `--strict` adds stricter cross-project isolation. Zero dependencies, plain Python 3.
 - `brain-export` bundles the brain into one pasteable file for another assistant — infra redacted by
   default.
-- An optional `brain-nudge` Stop hook fires at the **end of a turn** (throttled, so it nudges once after
+- An optional `brain-inject` `SessionStart` hook reads `.project-brain/index.compact` and injects it
+  as context at the **start of the session**, before the agent does anything — so the compact index
+  loads mechanically instead of depending on the model choosing to read it.
+- An optional `brain-nudge` `Stop` hook fires at the **end of a turn** (throttled, so it nudges once after
   work, not every turn) and reminds you to save when a turn changed files but the brain wasn't updated.
   It only **suggests** — it never writes to the brain.
 - **It doesn't bloat over time.** Topic files are cold storage — only the index is loaded eagerly, so
