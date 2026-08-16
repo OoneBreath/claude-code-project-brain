@@ -1,0 +1,54 @@
+#!/usr/bin/env python3
+"""brain-autocompact — regenerate index.compact right after index.md is edited
+(Claude Code "PostToolUse" hook, matched to Edit|Write|MultiEdit).
+
+index.compact is what `brain-inject` loads at session start and what agents read
+first mid-session. Without this hook it only refreshes when someone remembers to
+run `brain-compact` (or `brain-check --fix`) by hand, so it can silently drift out
+of date for an entire session. Regeneration is deterministic and free (no LLM
+call), so doing it on every index.md write is cheap and safe.
+
+Reads the PostToolUse JSON payload on stdin, looks at tool_input.file_path; if
+it isn't a `.../.project-brain/index.md`, exits silently. Never blocks the tool
+call and never reports failure to the model — this is a background convenience,
+not a gate. No third-party dependencies — Python 3 stdlib only (uses the same
+`_compact` renderer as `brain-compact`, so the two can't drift from each other).
+"""
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _compact  # noqa: E402
+
+
+def main():
+    try:
+        payload = json.load(sys.stdin)
+    except Exception:
+        return 0
+
+    file_path = (payload.get("tool_input") or {}).get("file_path")
+    if not file_path:
+        return 0
+    file_path = os.path.abspath(file_path)
+    if os.path.basename(file_path) != "index.md":
+        return 0
+    if os.path.basename(os.path.dirname(file_path)) != ".project-brain":
+        return 0
+    if not os.path.isfile(file_path):
+        return 0
+
+    brain = os.path.dirname(file_path)
+    try:
+        from datetime import date
+        compact = _compact.render_compact(_compact.read_text(file_path), date.today().isoformat())
+        with open(os.path.join(brain, "index.compact"), "w", encoding="utf-8") as fh:
+            fh.write(compact)
+    except Exception:
+        pass  # never let a rendering hiccup surface as a hook failure
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

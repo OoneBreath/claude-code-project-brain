@@ -26,11 +26,12 @@ echo "✓ Installed project-brain skill to ${DEST}"
 # idempotent (skip if already present), back up + show a diff before writing.
 # Uses node (a hard dependency of Claude Code) so there's no jq requirement.
 #
-# $1 = hook event name (e.g. "Stop", "SessionStart")
+# $1 = hook event name (e.g. "Stop", "SessionStart", "PostToolUse")
 # $2 = marker substring used to detect "already registered" (the script's basename)
 # $3 = full command to run
+# $4 = optional matcher (PostToolUse only, e.g. "Edit|Write|MultiEdit")
 register_hook() {
-  local event="$1" marker="$2" cmd="$3"
+  local event="$1" marker="$2" cmd="$3" matcher="${4:-}"
   if ! command -v node >/dev/null 2>&1; then
     echo "  ! node not found — skipping ${event}-hook registration."
     echo "    Add it by hand: a ${event} hook running ${cmd}"
@@ -39,9 +40,9 @@ register_hook() {
   mkdir -p "$(dirname "$SETTINGS")"
   local tmp; tmp="$(mktemp)"
   local rc=0
-  node - "$SETTINGS" "$event" "$marker" "$cmd" "$tmp" <<'NODE' || rc=$?
+  node - "$SETTINGS" "$event" "$marker" "$cmd" "$matcher" "$tmp" <<'NODE' || rc=$?
 const fs = require('fs');
-const [, , settingsPath, event, marker, hookCmd, outPath] = process.argv;
+const [, , settingsPath, event, marker, hookCmd, matcher, outPath] = process.argv;
 let cfg = {};
 try {
   const raw = fs.existsSync(settingsPath) ? fs.readFileSync(settingsPath, 'utf8').trim() : '';
@@ -53,7 +54,9 @@ cfg.hooks = cfg.hooks || {};
 let list = Array.isArray(cfg.hooks[event]) ? cfg.hooks[event]
          : (cfg.hooks[event] ? [cfg.hooks[event]] : []);
 if (JSON.stringify(list).includes(marker)) process.exit(10); // already registered
-list.push({ hooks: [{ type: 'command', command: hookCmd }] });
+const entry = { hooks: [{ type: 'command', command: hookCmd }] };
+if (matcher) entry.matcher = matcher;
+list.push(entry);
 cfg.hooks[event] = list;
 fs.writeFileSync(outPath, JSON.stringify(cfg, null, 2) + '\n');
 process.exit(0);
@@ -78,5 +81,6 @@ NODE
 }
 register_hook "Stop" "brain-nudge" "${DEST}/brain-nudge"
 register_hook "SessionStart" "brain-inject" "${DEST}/brain-inject"
+register_hook "PostToolUse" "brain-autocompact" "${DEST}/brain-autocompact" "Edit|Write|MultiEdit"
 
 echo "  Start a Claude Code session and run:  /project-brain  (then 'init')"
