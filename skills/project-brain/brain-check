@@ -29,13 +29,17 @@ Exit code: 0 = clean (warnings allowed), 1 = errors found.
 No third-party dependencies — Python 3 stdlib only.
 
 Usage:
-  brain-check [PATH] [--strict] [--report] [--diff YYYY-MM-DD]
+  brain-check [PATH] [--strict] [--report] [--diff YYYY-MM-DD] [--fix]
       PATH      a .project-brain dir, a workspace containing one, or omitted (cwd)
       --strict  also flag cross-project name-drops in topic bodies (noisy on coupled brains)
       --report  print a grouped, readable report (staleness, conflicts, orphans, …) instead
                 of a flat warning list — same checks, easier to scan
       --diff D  instead of validating, list what changed on/after date D — new/updated topics,
                 session lines, resume lines, decisions, and people — from the brain's own dates
+      --fix     apply the two MECHANICAL fixes before validating (everything else stays a
+                human judgment call): regenerate a missing/stale index.compact, and rotate
+                any project's _session.md past 5 active lines into _session.cold.md. Then
+                runs the normal validation so you see what (if anything) still needs you.
 """
 import os
 import re
@@ -293,10 +297,76 @@ def run_diff(brain, cutoff):
     return 0
 
 
+def fix_compact(brain):
+    """Regenerate index.compact if it's missing or out of date with index.md. Returns bool changed."""
+    index = os.path.join(brain, "index.md")
+    compact_path = os.path.join(brain, "index.compact")
+    expected = _compact.render_compact(read_text(index), date.today().isoformat())
+    if os.path.isfile(compact_path):
+        if _compact.data_lines(read_text(compact_path)) == _compact.data_lines(expected):
+            return False
+    with open(compact_path, "w", encoding="utf-8") as fh:
+        fh.write(expected)
+    return True
+
+
+def rotate_session_logs(brain):
+    """Move each project's _session.md entries past the first 5 into _session.cold.md.
+
+    _session.md is newest-first (one `> resume …` line per entry, blank-line separated,
+    header lines start with `#`). The overflow (oldest) entries are PREPENDED into
+    _session.cold.md, right after its own header — they are newer than whatever is
+    already archived there, so newest-first order holds across both files together.
+    Returns [(project, n_moved), ...] for projects actually rotated.
+    """
+    moved = []
+    projects_dir = os.path.join(brain, "projects")
+    if not os.path.isdir(projects_dir):
+        return moved
+    for proj in sorted(os.listdir(projects_dir)):
+        pdir = os.path.join(projects_dir, proj)
+        sp = os.path.join(pdir, "_session.md")
+        if not os.path.isfile(sp):
+            continue
+        lines = read_text(sp).splitlines()
+        i = 0
+        header = []
+        while i < len(lines) and (not lines[i].strip() or lines[i].strip().startswith("#")):
+            header.append(lines[i])
+            i += 1
+        entries = [ln for ln in lines[i:] if ln.strip()]
+        if len(entries) <= 5:
+            continue
+        keep, overflow = entries[:5], entries[5:]
+
+        with open(sp, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(header).rstrip("\n") + "\n\n" + "\n\n".join(keep) + "\n")
+
+        cp = os.path.join(pdir, "_session.cold.md")
+        if os.path.isfile(cp):
+            cold_lines = read_text(cp).splitlines()
+            j = 0
+            cold_header = []
+            while j < len(cold_lines) and (not cold_lines[j].strip() or cold_lines[j].strip().startswith("#")):
+                cold_header.append(cold_lines[j])
+                j += 1
+            cold_entries = [ln for ln in cold_lines[j:] if ln.strip()]
+        else:
+            cold_header = [f"# Session log (cold) — {proj} · oldest resume lines"]
+            cold_entries = []
+        merged = overflow + cold_entries
+        with open(cp, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(cold_header).rstrip("\n") + "\n\n" + "\n\n".join(merged) + "\n")
+
+        moved.append((proj, len(overflow)))
+    return moved
+
+
 def main():
     args = sys.argv[1:]
     strict = "--strict" in args
     report = "--report" in args
+    fix = "--fix" in args
 
     diff_date = None
     if "--diff" in args:
@@ -320,6 +390,19 @@ def main():
 
     if diff_date:  # --diff is its own focused view; it does not run the full validation
         return run_diff(brain, diff_date)
+
+    if fix:
+        compact_changed = fix_compact(brain)
+        rotated = rotate_session_logs(brain)
+        if compact_changed or rotated:
+            print("brain-check --fix:")
+            if compact_changed:
+                print("  ✓ regenerated index.compact")
+            for proj, n in rotated:
+                print(f"  ✓ rotated {n} old line(s) from projects/{proj}/_session.md → _session.cold.md")
+            print()
+        else:
+            print("brain-check --fix: nothing to fix (compact current, no session-log overflow)\n")
 
     errors, warnings = [], []
     today = date.today()
