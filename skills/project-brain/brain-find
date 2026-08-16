@@ -1,0 +1,127 @@
+#!/usr/bin/env python3
+"""brain-find — search a Project Brain by tag or keyword.
+
+Fast path: matches a query against each topic/person's `tags:` frontmatter, its
+slug (filename), and its `project:` / `topic:` / `person:` fields — no body text
+read unless asked. That keeps it cheap and low-noise on a brain with a lot of prose.
+
+`--body` extends the search into the file's full text (frontmatter + body) for a
+plain keyword search when a tag guess doesn't land.
+
+No third-party dependencies — Python 3 stdlib only.
+
+Usage:
+  brain-find QUERY [PATH] [--body]
+      QUERY   tag or keyword to search for (case-insensitive, substring match)
+      PATH    a .project-brain dir, a workspace containing one, or omitted (cwd)
+      --body  also search full file text, not just tags/slug/project/topic
+"""
+import os
+import re
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _compact  # noqa: E402  (shared find_brain helper)
+
+
+def read_text(path):
+    with open(path, encoding="utf-8") as fh:
+        return fh.read()
+
+
+def parse_frontmatter(text):
+    m = re.match(r"---\s*\n(.*?)\n---", text, re.S)
+    if not m:
+        return None
+    fm = {}
+    for line in m.group(1).splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or ":" not in line:
+            continue
+        k, _, v = line.partition(":")
+        fm[k.strip()] = v.strip()
+    return fm
+
+
+def parse_tags(val):
+    """`tags: [a, b, c]` or `tags: a, b, c` -> ["a", "b", "c"]."""
+    if not val:
+        return []
+    v = val.strip()
+    if v.startswith("[") and v.endswith("]"):
+        v = v[1:-1]
+    return [t.strip().strip("'\"") for t in v.split(",") if t.strip()]
+
+
+def iter_files(brain):
+    """Every topic file (projects/<p>/<topic>.md) and people/<slug>.md — never _session/_decisions."""
+    pdir = os.path.join(brain, "projects")
+    if os.path.isdir(pdir):
+        for root, _dirs, files in os.walk(pdir):
+            for name in sorted(files):
+                if name.endswith(".md") and not name.startswith("_"):
+                    yield os.path.join(root, name)
+    ppl = os.path.join(brain, "people")
+    if os.path.isdir(ppl):
+        for name in sorted(os.listdir(ppl)):
+            if name.endswith(".md") and not name.startswith("_"):
+                yield os.path.join(ppl, name)
+
+
+def main():
+    args = sys.argv[1:]
+    body_search = "--body" in args
+    positional = [a for a in args if not a.startswith("-")]
+    if not positional:
+        print("Usage: brain-find QUERY [PATH] [--body]", file=sys.stderr)
+        return 1
+
+    query = positional[0].lower()
+    brain = _compact.find_brain(positional[1] if len(positional) > 1 else None)
+    if not brain:
+        print("✗ No .project-brain found (looked in cwd / given path).", file=sys.stderr)
+        return 1
+
+    hits = []  # (project, rel_path, frontmatter, tags)
+    for full in iter_files(brain):
+        rel = os.path.relpath(full, brain)
+        text = read_text(full)
+        fm = parse_frontmatter(text) or {}
+        tags = parse_tags(fm.get("tags", ""))
+        slug = os.path.basename(full)[:-3]
+        fields = [t.lower() for t in tags] + [
+            slug.lower(),
+            fm.get("project", "").lower(),
+            fm.get("topic", "").lower(),
+            fm.get("person", "").lower(),
+        ]
+        matched = any(query in f for f in fields if f)
+        if not matched and body_search:
+            matched = query in text.lower()
+        if matched:
+            proj = fm.get("project") or fm.get("person") or os.path.basename(os.path.dirname(full))
+            hits.append((proj, rel, fm, tags))
+
+    if not hits:
+        hint = "" if body_search else " (tags/slug/project only — try --body for full-text)"
+        print(f"No matches for '{query}' in {brain}{hint}")
+        return 0
+
+    hits.sort(key=lambda h: (h[0], h[1]))
+    print(f"Project Brain — matches for '{query}':\n")
+    last_proj = None
+    for proj, rel, fm, tags in hits:
+        if proj != last_proj:
+            print(f"{proj}:")
+            last_proj = proj
+        status = fm.get("status", "?")
+        ver = fm.get("version")
+        tagstr = f"  tags: {', '.join(tags)}" if tags else ""
+        vstr = f" · v{ver}" if ver else ""
+        print(f"  {rel}  [{status}{vstr}]{tagstr}")
+    print(f"\n{len(hits)} match(es).")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
