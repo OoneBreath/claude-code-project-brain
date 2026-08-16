@@ -2,7 +2,7 @@
 
 **Stop re-explaining your projects to the AI every session.**
 
-[![Version](https://img.shields.io/badge/version-2.2.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.3.0-blue)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Runtime deps](https://img.shields.io/badge/runtime%20deps-zero-success)](#how-it-works)
 [![Works with](https://img.shields.io/badge/works%20with-Claude%20Code%20%C2%B7%20Cursor%20%C2%B7%20Windsurf-purple)](#works-across-tools-same-brain-different-agents)
@@ -160,6 +160,26 @@ date — read straight from the brain's own dates, no git required.
 
 ---
 
+## What's new in 2.3
+
+Closes the loop 2.2 opened: the brain now stays fresh without a manual step, gets mechanical
+drift fixed for you, and is searchable by tag/keyword — backward compatible, still zero required
+runtime dependencies.
+
+- **`brain-autocompact` — a new hook that regenerates `index.compact` right after `index.md` is
+  saved.** Without it, the compact index only refreshes when someone remembers to run
+  `brain-compact` by hand, so it can sit stale for a whole session. Silent no-op on any other file.
+- **`brain-check --fix`** — applies the two *mechanical* fixes before validating: regenerates a
+  missing/stale `index.compact`, and rotates a project's `_session.md` past 5 active lines into
+  `_session.cold.md`. Everything else (orphans, staleness, conflicts) stays a human call.
+- **`brain-find QUERY [workspace] [--body]`** — search the brain by tag or keyword instead of
+  walking the index by hand. Matches `tags:`, filename, and project/topic/person fields by
+  default; `--body` extends to full file text.
+
+Full details in the [CHANGELOG](CHANGELOG.md).
+
+---
+
 ## What's new in 2.2
 
 New hook that makes the brain load mechanically instead of relying on the agent choosing to read
@@ -227,9 +247,10 @@ cd claude-code-project-brain
 
 **Start a new Claude Code session after installing** — skills load at session start.
 
-> `install.sh` also wires the optional `brain-inject` (auto-load) and `brain-nudge` (save-reminder)
-> hooks by **merging** them into `~/.claude/settings.json` — it keeps your existing settings, is
-> idempotent, and backs up + prints a diff before writing (a corrupt or foreign settings.json is left
+> `install.sh` also wires the optional `brain-inject` (auto-load), `brain-autocompact` (auto-refresh),
+> and `brain-nudge` (save-reminder) hooks by **merging** them into `~/.claude/settings.json` — it
+> keeps your existing settings, is idempotent, and backs up + prints a diff before writing (a
+> corrupt or foreign settings.json is left
 > untouched).
 
 Then, in a session inside your workspace:
@@ -262,12 +283,17 @@ workspace root and it catalogs them all in one brain.
 - `brain-check` (`python3 ~/.claude/skills/project-brain/brain-check`) validates the brain — broken
   pointers, malformed frontmatter, index↔topic drift, stale facts, misfiled cross-project notes, tech
   conflicts, people records. `--report` groups it readably; `--diff <date>` shows what changed;
-  `--strict` adds stricter cross-project isolation. Zero dependencies, plain Python 3.
+  `--strict` adds stricter cross-project isolation; `--fix` applies the mechanical fixes (stale
+  `index.compact`, session-log rotation) before validating. Zero dependencies, plain Python 3.
+- `brain-find QUERY [path] [--body]` searches the brain by tag or keyword — `tags:` frontmatter,
+  filename, and project/topic/person fields by default; `--body` extends to full file text.
 - `brain-export` bundles the brain into one pasteable file for another assistant — infra redacted by
   default.
 - An optional `brain-inject` `SessionStart` hook reads `.project-brain/index.compact` and injects it
   as context at the **start of the session**, before the agent does anything — so the compact index
   loads mechanically instead of depending on the model choosing to read it.
+- An optional `brain-autocompact` `PostToolUse` hook regenerates `index.compact` right after
+  `index.md` is saved, so the compact index `brain-inject` loads never sits stale mid-session.
 - An optional `brain-nudge` `Stop` hook fires at the **end of a turn** (throttled, so it nudges once after
   work, not every turn) and reminds you to save when a turn changed files but the brain wasn't updated.
   It only **suggests** — it never writes to the brain.

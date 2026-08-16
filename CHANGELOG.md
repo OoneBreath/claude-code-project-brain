@@ -3,6 +3,32 @@
 All notable changes to Project Brain are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); the project uses semantic-ish versioning.
 
+## [2.3.0] — 2026-08-16
+
+Closes the loop the last two releases opened: the brain now loads itself (2.2), stays fresh
+without a manual step, gets mechanical drift fixed for you, and is searchable by tag/keyword.
+**Backward compatible**, still zero required runtime dependencies (Python 3 stdlib only).
+
+### Added
+- **`brain-autocompact` — a new `PostToolUse` hook (matched to `Edit|Write|MultiEdit`) that
+  regenerates `index.compact` right after `index.md` is saved.** Without it, `index.compact` —
+  what `brain-inject` loads at session start — only refreshes when someone remembers to run
+  `brain-compact` by hand, so it can drift stale for an entire session. Regeneration is
+  deterministic and free (no LLM call), so doing it on every save is cheap. Silent no-op for
+  any edit that isn't a brain's `index.md`; never blocks the tool call. Wired automatically for
+  plugin installs (`hooks/hooks.json`); `install.sh` registers it for skill installs alongside
+  the other two hooks, through the same idempotent merge routine (now matcher-aware).
+- **`brain-check --fix`** — applies the two *mechanical* fixes before validating: regenerates a
+  missing/stale `index.compact`, and rotates any project's `_session.md` past 5 active lines into
+  `_session.cold.md` (oldest entries move out, newest-first order preserved across both files).
+  Everything else — orphans, staleness, conflicts — stays a human judgment call; `--fix` never
+  guesses at those. Idempotent: a second `--fix` reports "nothing to fix" once the brain is
+  current. Then runs the normal validation so you see what, if anything, still needs you.
+- **`brain-find QUERY [workspace] [--body]`** — search a brain by tag or keyword instead of
+  walking the index by hand. Fast path matches `tags:` frontmatter, filename, and
+  `project:`/`topic:`/`person:` fields (cheap, low-noise); `--body` extends to full file text
+  when a tag guess doesn't land. Groups results by project with status/version/tags shown.
+
 ## [2.2.0] — 2026-08-15
 
 New hook that makes the brain load mechanically instead of relying on the agent choosing to

@@ -1,14 +1,15 @@
 ---
 name: project-brain
-version: 2.2.0
+version: 2.3.0
 author: Slawomir Luzny <info@fixflex.co.uk> (https://fixflex.co.uk)
 description: >-
   Persistent, navigable project memory for Claude Code that survives across
   sessions and months. Use when the user wants to set up project memory ("set up
   project brain", "init brain"), recall how something was solved before ("how did
   we solve the cache", "what did we do with auth"), check whether a task was
-  already done before redoing it ("did we already swap the logo?"), or save what
-  was accomplished after finishing work. Especially for multi-project / multi-server
+  already done before redoing it ("did we already swap the logo?"), find something by
+  tag or keyword across the whole brain ("where did we write anything about Stripe?"),
+  or save what was accomplished after finishing work. Especially for multi-project / multi-server
   setups where Claude must remember each project's stack, decisions and pitfalls
   without re-reading huge docs every session.
 ---
@@ -102,8 +103,9 @@ and offer to scope it to **one project at a time** rather than the whole workspa
      = the AI wrote it without confirmation — useful, but verify before you rely on it.
    - Past its `review_by`, or `last_done` long ago = possibly stale. Say "this was confirmed back
      in <date> — worth re-checking?" rather than presenting it as current fact.
-6. For cross-cutting questions ("everything Redis", "all auth work"), grep topic-file
-   frontmatter `tags:` rather than reading files whole.
+6. For cross-cutting questions ("everything Redis", "all auth work") or when you don't know
+   which project/topic to look under, run `brain-find QUERY [workspace]` (see *Search*) instead of
+   reading files whole — it's a tag/keyword search across the brain.
 7. **Before proposing a choice** (a library, a host, an architecture), read the project's
    `_decisions.md` and the brain-wide `decisions.md` (see *Decision log*) so you don't re-propose
    an option that was already weighed and rejected.
@@ -158,6 +160,24 @@ to additionally flag topics that name-drop another project without a
 `cross_refs:` (off by default — noisy on coupled brains). Exit code 1 = real errors to fix; warnings
 (staleness, provenance, cross-project, compact-drift, thin **and over-long** topics, session-log
 overflow, orphans, over-fragmentation) are advisory.
+
+Add `--fix` to apply the two *mechanical* fixes before validating — regenerate a missing/stale
+`index.compact`, and rotate any project's `_session.md` past 5 active lines into `_session.cold.md`
+(oldest entries move out, newest-first order preserved across both files). Everything else stays a
+human judgment call (orphans, staleness, conflicts — `--fix` never guesses at those). It then runs
+the normal validation so you immediately see what, if anything, still needs you. Idempotent — a
+second `--fix` reports "nothing to fix" once the brain is current.
+
+## Search — brain-find
+Look something up by tag or keyword instead of walking the index by hand:
+```
+python3 ~/.claude/skills/project-brain/brain-find QUERY [workspace] [--body]
+```
+Matches (case-insensitive substring) against a topic or person's `tags:` frontmatter, its filename,
+and its `project:`/`topic:`/`person:` fields — cheap and low-noise, no file bodies read. Add `--body`
+to also search full file text when a tag guess doesn't land. Groups results by project, showing each
+match's status, version, and tags — good for "where did we write anything about Stripe?" without
+guessing which topic file it landed in.
 
 ## index.md format
 
@@ -451,15 +471,21 @@ version: 2
   save and let the user decide. (The bundled `brain-nudge` Stop hook only reminds — it cannot write.)
 - **Keep CLAUDE.md pointer tiny.** It points to the map; it is not a copy of the map.
 
-## Optional: the bundled hooks (brain-inject, brain-nudge)
+## Optional: the bundled hooks (brain-inject, brain-autocompact, brain-nudge)
 
-Two small hooks make the brain load and stay current mechanically, instead of depending on the
-agent choosing to do either.
+Three small hooks make the brain load and stay current mechanically, instead of depending on the
+agent choosing to do any of it.
 
 **`brain-inject`** (`SessionStart`) reads `.project-brain/index.compact` for the current workspace
 and returns it as context at the **start of the session**, before the agent does anything — so the
 compact index is always loaded, even by a model that would otherwise skip reading it on a plain
 greeting. No brain in the project → silent no-op.
+
+**`brain-autocompact`** (`PostToolUse`, matched to `Edit|Write|MultiEdit`) regenerates
+`index.compact` right after `index.md` is saved — so the compact index (what `brain-inject` loads,
+and what an agent re-reads mid-session) never sits stale for the rest of a session waiting on
+someone to remember `brain-compact`. It's a silent no-op for every edit that isn't a brain's
+`index.md`, and it never blocks the tool call.
 
 **`brain-nudge`** (`Stop`) reminds you to keep the brain current. It fires at the **end of a turn**
 (not at session end) and is **throttled**, so when a turn changed files but `index.md` wasn't
@@ -467,7 +493,7 @@ updated, it surfaces the note *once after the work* — *"you did work — want 
 on every turn. It **never writes to the brain and never blocks** — auto-saving everything would turn
 the map into a swamp. It only nudges; the human still decides what is worth keeping.
 
-- Installed as a **plugin**, both hooks are wired up automatically (`hooks/hooks.json`).
+- Installed as a **plugin**, all three hooks are wired up automatically (`hooks/hooks.json`).
 - Installed as a **skill**, `install.sh` wires them for you — it **merges** each hook into
   `~/.claude/settings.json` (keeping your existing settings, idempotent, with a backup). If you ever
   need to add them by hand:
@@ -475,6 +501,9 @@ the map into a swamp. It only nudges; the human still decides what is worth keep
   { "hooks": {
     "SessionStart": [ { "hooks": [
       { "type": "command", "command": "~/.claude/skills/project-brain/brain-inject" }
+    ] } ],
+    "PostToolUse": [ { "matcher": "Edit|Write|MultiEdit", "hooks": [
+      { "type": "command", "command": "~/.claude/skills/project-brain/brain-autocompact" }
     ] } ],
     "Stop": [ { "hooks": [
       { "type": "command", "command": "~/.claude/skills/project-brain/brain-nudge" }
